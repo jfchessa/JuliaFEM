@@ -36,8 +36,7 @@ export DelayedAssmMat, add_kmat!, assemble_mat
 
 export AbstractBC, GeneralBC, addDof!
 #-------------------------------------------------------------------------
-using SparseArrays
-using LinearAlgebra
+using SparseArrays, LinearSolve, LinearAlgebra
 
 import Base.getindex, Base.setindex!, Base.length, Base.size
 
@@ -1210,8 +1209,7 @@ formnvt!(NvT, N, e::AbstractElement) = formnvt!(NvT, N, elemsdim(e), elemnne(e))
 #----------------------------------------------------------------------------
 # system operators and solving routines
 
-function enforcebc!(K, f::Array{<:Number,1}, ifix::Array{<:Integer,1},
-	              ival::Array{})
+function enforcebc!(K, f, ifix, ival)
 	m = size(K, 2)
 	nfix = length(ifix)
 	for ii = 1:nfix
@@ -1231,7 +1229,15 @@ function enforcebc!(K, f::Array{<:Number,1}, ifix::Array{<:Integer,1},
 	end
 end
 
-function cholesky_solve(K::AbstractArray, f::Array{<:Number,1})
+function penaltybc!(K, f, ifix, ival, penal=10e5)
+	for (ii, I) in enumerate(ifix)
+		KII = sum(K[I,:])*penal
+		K[I,I] = KII
+		f[I] = KII*ival[ii]
+	end
+end
+
+function cholesky_solve(K, f)
 	"""
 	cholesky_solve(K::AbstractArray, f::Array{<:Number,1})
 	"""
@@ -1240,17 +1246,27 @@ function cholesky_solve(K::AbstractArray, f::Array{<:Number,1})
 	return d
 end
 
-function fesolve!(K::AbstractArray, f::Array{<:Number,1},
-		ifix::Array{<:Integer,1},
-		ival::Array{<:Number,1}=zeros(length(ifix)))
+function fesolve!(K::Array, f, ifix, ival=zeros(length(ifix)))
 	"""
-	fesolve(K, f, ifix, ival)
+	fesolve(K, f, ifix, ival) for dense arrays
 	"""
 	Kr = K[ifix,:]
 	ff = deepcopy(f)
 	enforcebc!(K, ff, ifix, ival)
   	d = cholesky_solve(K, ff)
   	f[ifix] = Kr*d
+	return d
+end # of fesolve function
+
+function fesolve!(K::AbstractSparseArray, f, ifix)
+	"""
+	fesolve(K, f, ifix, ival) for sparse arrays
+	"""
+	Kr = K[ifix,:]
+	linsol = LinearProblem(K, f)
+	sol = solve(linsol, IterativeSolversJL_CG())
+	d = sol.u
+	f[ifix,:] = Kr*d
 	return d
 end # of fesolve function
 
