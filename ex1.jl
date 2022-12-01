@@ -1,11 +1,12 @@
 module FEA2D
 
-using Main.FEM, LinearAlgebra 
+using FEM, LinearAlgebra 
 
 struct ProblemDefinition
 """
 A structure to define an input Problem
 """
+    name        # a description of the problem
     node        # node coordinate array
     conn        # element connectivity (quad4) 
     E           # Young's modulus
@@ -22,9 +23,9 @@ Defines a rectangular domain of LxH with the left hand side fixed and
 a downward point load on the lower right hand corner.
 """
     L = 10
-    H = 6
-    nelx = 160
-    nely = 80
+    H = 3
+    nelx = 100
+    nely = 30
 
     young = 10.0e6
     nu = 0.3
@@ -34,6 +35,8 @@ a downward point load on the lower right hand corner.
     nny = nely+1
     nn = nnx*nny
 
+    name = "Cantilever_beam"
+
     conn = FEM.Meshing.genconn2d([1,2,nnx+2,nnx+1], nelx, nely);
     node = FEM.Meshing.nodearray2d([0 L L 0; 0 0 H H], nnx, nny);
     
@@ -41,7 +44,7 @@ a downward point load on the lower right hand corner.
     iforce = [2*nnx]
     fforce = -1000.0
 
-    return ProblemDefinition(node, conn, young, nu, thk, ifix, iforce, fforce)
+    return ProblemDefinition(name, node, conn, young, nu, thk, ifix, iforce, fforce)
 end
 
 function bmat_quad4(coord, xi)
@@ -152,10 +155,26 @@ function solve(prob)
     return d, sig
 end
 
+function compute_mises(sig)
+    return sqrt.(0.5*(sig[1,:].^2 + sig[2,:].^2 +(sig[1,:]-sig[2,:]).^2 +6*sig[3,:].^2))
+end
+
+function write_output(prob, d, sig)
+    output = FEM.IO.output_mesh(prob.name*".vtu", prob.node, prob.conn, "Quad")
+	FEM.IO.output_node_vdata(output, d, "disp", [1,2])
+    FEM.IO.output_element_sdata(output, sig[1,:], "sxx")
+    FEM.IO.output_element_sdata(output, sig[2,:], "syy")
+    FEM.IO.output_element_sdata(output, sig[3,:], "sxy")
+    FEM.IO.output_element_sdata(output, compute_mises(sig), "svm")
+	FEM.IO.write_outputfile(output)
+end
+
 end  # of FEA2D module
 ##########################################################################
 
 using .FEA2D
 
+
 prob = FEA2D.prob1();
-sol = FEA2D.solve(prob);
+d, sig = FEA2D.solve(prob);
+FEA2D.write_output(prob, d, sig);

@@ -882,6 +882,9 @@ length(qd::QuadratureData) = length(qd.qpt)
 #   Abstract Element
 #
 
+# The AbstractElement seeks to abstract diffenent element implementations
+# It contains an element connectivity
+#
 etopo2qtype = Dict("Line"=>"GAUSS", "Tria"=>"SIMPLEX", "Quad"=>"GAUSS",
      "Tetra"=>"SIMPLEX", "Hexa"=>"GAUSS", "Penta"=>"PENTA")
 
@@ -1206,10 +1209,75 @@ function formnvt!(NvT, N, sdim=size(NvT,1), nn=length(N))
 	return Ii
 end
 formnvt!(NvT, N, e::AbstractElement) = formnvt!(NvT, N, elemsdim(e), elemnne(e))
+
+# ----------- D E L A Y E D   A S S E M B L Y    S T U F F ------------
+function delayassmij(conn, nldof=1)
+    ne = size(conn,2)
+    nne = size(conn,1)
+    kedim = nldof*nne
+    i = Array{IDTYPE}(undef,kedim,kedim,ne)
+    j = Array{IDTYPE}(undef,kedim,kedim,ne)
+    sctr = zeros(1,kedim)
+    for e = 1:ne
+        setsctr!(sctr, conn[:,e], nne, nldof)
+        for (ii, Ii) in enumerate(sctr)
+            for (jj, Jj) in enumerate(sctr)
+                i[ii,jj,e] = Ii
+                j[ii,jj,e] = Jj 
+            end
+        end
+    end
+    return i, j
+end
+
+function delayassm(kvals, conn, nldof)
+    is, js = delayassmij(conn, nldof)
+    return(sparse(vec(is), vec(js), vec(kvals)))
+end
+
+struct DelayedAssmMat
+    is::Array{IDTYPE,3}
+    js::Array{IDTYPE,3}
+    kvals::Array{REALTYPE,3}
+end
+
+DelayedAssmMat(ne::Int, kdim::Int) = DelayedAssmMat(Array{IDTYPE}(undef,kdim,kdim,ne), 
+                 Array{IDTYPE}(undef,kdim,kdim,ne), Array{REALTYPE}(undef,kdim,kdim,ne)) 
+
+function DelayedAssmMat(conn, nldof) 
+    is, js = delayassmij(conn, nldof)
+    nne, ne = size(conn)
+    d = nne*nldof
+    DelayedAssmMat(is, js, zeros(d,d,ne))
+end
+
+function add_kmat!(K::DelayedAssmMat, e, ke)
+    K.kvals[:,:,e] = ke
+end
+
+function add_kmat!(K::DelayedAssmMat, e, ke, sctr)
+    K.kvals[:,:,e] = ke   
+    for (ii, Ii) in enumerate(sctr)
+        for (jj, Jj) in enumerate(sctr)
+            K.is[ii,jj,e] = Ii
+            K.js[ii,jj,e] = Jj 
+        end
+    end
+end
+
+function assemble_mat(K::DelayedAssmMat)
+    return(sparse(vec(K.is), vec(K.js), vec(K.kvals)))
+end
+
 #----------------------------------------------------------------------------
 # system operators and solving routines
 
 function enforcebc!(K, f, ifix, ival)
+	"""
+	function enforcebc!(K, f, ifix, ival)
+
+	Enforces an essential BC on a Kd=f system using an equation substitution
+	"""
 	m = size(K, 2)
 	nfix = length(ifix)
 	for ii = 1:nfix
@@ -1229,9 +1297,14 @@ function enforcebc!(K, f, ifix, ival)
 	end
 end
 
-function penaltybc!(K, f, ifix, ival, penal=10e5)
+function penaltybc!(K, f, ifix, ival=zeros(length(ifix)), penal=10.0e5)
+	"""
+	function penaltybc!(K, f, ifix, ival=zeros(length(ifix)), penal=10.0e5)
+
+	Enforces an essential BC on a Kd=f system using a penalty method
+	"""
 	for (ii, I) in enumerate(ifix)
-		KII = sum(K[I,:])*penal
+		KII = sum(abs.(K[I,:]))*penal
 		K[I,I] = KII
 		f[I] = KII*ival[ii]
 	end
@@ -1248,7 +1321,7 @@ end
 
 function fesolve!(K::Array, f, ifix, ival=zeros(length(ifix)))
 	"""
-	fesolve(K, f, ifix, ival) for dense arrays
+	fesolve(K, f, ifix, ival=zeros) for dense arrays
 	"""
 	Kr = K[ifix,:]
 	ff = deepcopy(f)
@@ -1258,11 +1331,13 @@ function fesolve!(K::Array, f, ifix, ival=zeros(length(ifix)))
 	return d
 end # of fesolve function
 
-function fesolve!(K::AbstractSparseArray, f, ifix)
+function fesolve!(K::AbstractSparseArray, f, ifix, ival=zeros(length(ifix)))
 	"""
-	fesolve(K, f, ifix, ival) for sparse arrays
+	fesolve(K, f, ifix, ival=zeros) for sparse arrays
+	This uses a iterative CG solver.  Could d better probably
 	"""
 	Kr = K[ifix,:]
+	penaltybc!(K, f, ifix, ival)
 	linsol = LinearProblem(K, f)
 	sol = solve(linsol, IterativeSolversJL_CG())
 	d = sol.u
@@ -1443,65 +1518,6 @@ function addBC!(bc::AbstractBC, element::AbstractElement,
 	return n
 end
 
-# ----------- D E L A Y E D   A S S E M B L Y    S T U F F ------------
-function delayassmij(conn, nldof=1)
-    ne = size(conn,2)
-    nne = size(conn,1)
-    kedim = nldof*nne
-    i = Array{IDTYPE}(undef,kedim,kedim,ne)
-    j = Array{IDTYPE}(undef,kedim,kedim,ne)
-    sctr = zeros(1,kedim)
-    for e = 1:ne
-        setsctr!(sctr, conn[:,e], nne, nldof)
-        for (ii, Ii) in enumerate(sctr)
-            for (jj, Jj) in enumerate(sctr)
-                i[ii,jj,e] = Ii
-                j[ii,jj,e] = Jj 
-            end
-        end
-    end
-    return i, j
-end
-
-function delayassm(kvals, conn, nldof)
-    is, js = delayassmij(conn, nldof)
-    return(sparse(vec(is), vec(js), vec(kvals)))
-end
-
-struct DelayedAssmMat
-    is::Array{IDTYPE,3}
-    js::Array{IDTYPE,3}
-    kvals::Array{REALTYPE,3}
-end
-
-DelayedAssmMat(ne::Int, kdim::Int) = DelayedAssmMat(Array{IDTYPE}(undef,kdim,kdim,ne), 
-                 Array{IDTYPE}(undef,kdim,kdim,ne), Array{REALTYPE}(undef,kdim,kdim,ne)) 
-
-function DelayedAssmMat(conn, nldof) 
-    is, js = delayassmij(conn, nldof)
-    nne, ne = size(conn)
-    d = nne*nldof
-    DelayedAssmMat(is, js, zeros(d,d,ne))
-end
-
-function add_kmat!(K::DelayedAssmMat, e, ke)
-    K.kvals[:,:,e] = ke
-end
-
-function add_kmat!(K::DelayedAssmMat, e, ke, sctr)
-    K.kvals[:,:,e] = ke   
-    for (ii, Ii) in enumerate(sctr)
-        for (jj, Jj) in enumerate(sctr)
-            K.is[ii,jj,e] = Ii
-            K.js[ii,jj,e] = Jj 
-        end
-    end
-end
-
-function assemble_mat(K::DelayedAssmMat)
-    return(sparse(vec(K.is), vec(K.js), vec(K.kvals)))
-end
-
 #----------------------------- IO SUBMODULE --------------------------
 #                           Basic IO Capabilities
 module IO
@@ -1528,6 +1544,16 @@ elemvtktype(e::AbstractElement) = topovtktype[elemtopo(e)]
 #elemvtktype(element::Hexa8D3) = WriteVTK.VTKCellTypes.VTK_HEXAHEDRON
 
 function output_mesh(filename, node, element::AbstractElement)
+	"""
+	Writes a finite element type data to a vtk file opbject.  Note this does not actually
+	write the file yet.  This is done in write_outputfile().
+
+	output_mesh(filename, node, element)
+	
+	filename = output file name
+	node = node coordinate array
+	element is an AbstractElement type
+	"""
 	ne = numelem(element)
     cell =  Array{WriteVTK.MeshCell,1}(undef,ne)
     for e=1:ne
@@ -1537,11 +1563,47 @@ function output_mesh(filename, node, element::AbstractElement)
 	return vtkfile
 end
 
+function output_mesh(filename, node, conn::AbstractArray, etype)
+	"""	
+	Writes a finite element type data to a vtk file opbject.  Note this does not actually
+	write the file yet.  This is done in write_outputfile().
+
+	output_mesh(filename, node, conn, etype)
+	
+	filename = output file name
+	node = node coordinate array
+	conn = connectivity array``
+	etype = {"Line", "Tria", "Quad", "Tetra", "Hexa", "Penta"}
+	"""
+	nne, ne = size(conn)
+	vtktype = topovtktype[etype]
+    cell =  Array{WriteVTK.MeshCell,1}(undef,ne)
+    for e=1:ne
+      cell[e] = WriteVTK.MeshCell(vtktype, conn[:,e])
+    end
+    vtkfile = WriteVTK.vtk_grid(filename, node, cell)
+	return vtkfile
+end
+
 function output_node_sdata(vtkfile, d, dataname)
+	"""
+	writes scalar nodal data to a vtk file opbject.  Note this does not actually
+	write the file yet.  This is done in write_outputfile().
+	"""
 	WriteVTK.vtk_point_data(vtkfile, d, dataname)
 end
 
 function output_node_vdata(vtkfile, d, dataname, ddofs=[1,2,3], stride=length(ddofs))
+	"""
+	writes vector nodal data to a vtk file opbject.  Note this does not actually
+	write the file yet.  This is done in write_outputfile().
+
+	vtkfile a vtk output object. Typically comes from output_mesh()
+	d nx1 array of nodal data
+	dataname string of the dta name
+	ddofs vector of nodal dofs, default is [1,2,3]
+	stride stride between next node data, default is length(ddofs)
+	"""
 	# put d vector data in sdim x numnode array form
 	nn = Int(floor(length(d)/stride))
 	ns = length(ddofs)
@@ -1550,10 +1612,23 @@ function output_node_vdata(vtkfile, d, dataname, ddofs=[1,2,3], stride=length(dd
 end
 
 function output_element_sdata(vtkfile, d, dataname)
+	"""
+	writes vector nodal data to a vtk file opbject.  Note this does not actually
+	write the file yet.  This is done in write_outputfile().
+
+	vtkfile a vtk output object. Typically comes from output_mesh()
+	d is a nex1 array of scalar element data
+	dataname string of the data name
+	"""
 	WriteVTK.vtk_cell_data(vtkfile, d, dataname)
 end
 
 function write_outputfile(vtkfile)
+	"""
+	Writes the data to a file from a vtk object.
+	
+	function write_outputfile(vtkfile)
+	"""
 	outfiles = WriteVTK.vtk_save(vtkfile)
 end
 end # IO submodule
