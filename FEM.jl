@@ -28,6 +28,7 @@ export Line2D2, Line3D2, Tria3D2, Tria6D2, Quad4D2
 export Line2D3, Line3D3, Tria3D3, Tria6D3, Quad4D3,
        Tetra4D3, Tetra10D3, Hexa8D3, Penta6D3
 
+export BTBop!, BBTop!, BTCBop!, BCBTop! 
 export setsctr!, isojac!, gradbasis!, formbmat!, formnv!, formnvt!, fesolve!
 
 export AbstractDofMap, FixedDofMap, DofMap, numDof, GDOF, addDof!, setsctr!
@@ -1049,6 +1050,75 @@ local_dofs(e::ElementData) = collect(1:e.dofpn)
 
 #---------------------------------------------------------------------
 # Basic finite element utilities
+
+function BTBop!(ke, B, a)
+    """
+    function BTBop!(ke, B, a)
+        Computes ke = B^T*B*a
+    """
+    m, n = size(B)
+    fill!(ke, 0.0)
+    for j=1:n
+        for i=1:n
+            for k=1:m
+                ke[i,j] += B[k,i]*B[k,j]*a
+            end
+        end
+    end
+end
+
+function BBTop!(ke, B, a)
+    """
+    function BBTop!(ke, B, a)
+        Computes ke = B*B^T*a
+    """
+    m, n = size(B)
+    fill!(ke, 0.0)
+    for k=1:n
+        for j=1:m
+            for i=1:m
+                ke[i,j] += B[i,k]*B[j,k]*a
+            end
+        end
+    end
+end
+
+function BTCBop!(ke, B, C, a)
+    """
+    function BTCBop!(ke, B, C, a)
+        Computes ke = B^T*C*B*a
+    """
+    m, n = size(B)
+    fill!(ke, 0.0)
+    for l=1:m
+        for k=1:m
+            for j=1:n
+                for i=1:n
+                    ke[i,j] += B[k,i]*C[k,l]*B[l,j]*a
+                end
+            end
+        end
+    end
+end
+
+function BCBTop!(ke, B, C, a)
+    """
+    function BCBTop!(ke, B, C, a)
+        Computes ke = B*C*B^T*a
+    """
+    m, n = size(B)
+    fill!(ke, 0.0)
+    for k=1:n
+        for l=1:n
+            for j=1:m
+                for i=1:m
+                    ke[i,j] += B[i,k]*C[k,l]*B[j,l]*a
+                end
+            end
+        end
+    end
+end
+
 function setsctr!(sctr, conn, nn, ndofpn)
   """
   function setsctr(sctr, conn, nn, ndofpn)
