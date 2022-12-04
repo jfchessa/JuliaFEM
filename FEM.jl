@@ -986,7 +986,7 @@ elemdshape!(e::Penta6Element, dN, xi) = dshape_penta6!(dN, xi)
 
 # here is the generative code to do all concrete elements
 # elements are given in FN
-# They have the following constrruction methods
+# They have the following construction methods
 #
 #    Element#D#()
 #    Element#D#(conn, prop, data)
@@ -994,6 +994,10 @@ elemdshape!(e::Penta6Element, dN, xi) = dshape_penta6!(dN, xi)
 #    Element#D#(numelem, prop, data)
 #    Element#D#(numelem, prop)
 #    Element#D#(numelem)
+#
+#  So for example  
+#		elements = FEM.Hexa8D3(conn, prop)
+#		elements = FEM.Line2D2(conn, prop) ...
 #
 FN = (:Line2D1, :Line2D2, :Line2D3,
             :Line3D1, :Line3D2, :Line3D3,
