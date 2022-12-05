@@ -1055,13 +1055,16 @@ local_dofs(e::ElementData) = collect(1:e.dofpn)
 #---------------------------------------------------------------------
 # Basic finite element utilities
 
-function BTBop!(ke, B, a)
+function BTBop!(ke, B, a, add=true)
     """
-    function BTBop!(ke, B, a)
-        Computes ke = B^T*B*a
+    function BTBop!(ke, B, a, add=true)
+        Computes ke += B^T*B*a 
+		If add=false else ke is initially zeroed
     """
     m, n = size(B)
-    fill!(ke, 0.0)
+    if !add
+		fill!(ke, 0.0)
+	end
     for j=1:n
         for i=1:n
             for k=1:m
@@ -1071,13 +1074,16 @@ function BTBop!(ke, B, a)
     end
 end
 
-function BBTop!(ke, B, a)
+function BBTop!(ke, B, a, add=true)
     """
-    function BBTop!(ke, B, a)
-        Computes ke = B*B^T*a
+    function BBTop!(ke, B, a, add=true)
+        Computes ke += B*B^T*a 
+		If add=false else ke is initially zeroed
     """
     m, n = size(B)
-    fill!(ke, 0.0)
+    if !add
+		fill!(ke, 0.0)
+	end
     for k=1:n
         for j=1:m
             for i=1:m
@@ -1087,13 +1093,16 @@ function BBTop!(ke, B, a)
     end
 end
 
-function BTCBop!(ke, B, C, a)
+function BTCBop!(ke, B, C, a, add=true)
     """
-    function BTCBop!(ke, B, C, a)
-        Computes ke = B^T*C*B*a
+    function BTCBop!(ke, B, C, a, add=true)
+        Computes ke += B^T*C*B*a 
+		If add=false else ke is initially zeroed
     """
     m, n = size(B)
-    fill!(ke, 0.0)
+    if !add
+		fill!(ke, 0.0)
+	end
     for l=1:m
         for k=1:m
             for j=1:n
@@ -1105,13 +1114,16 @@ function BTCBop!(ke, B, C, a)
     end
 end
 
-function BCBTop!(ke, B, C, a)
+function BCBTop!(ke, B, C, a, add=true)
     """
-    function BCBTop!(ke, B, C, a)
-        Computes ke = B*C*B^T*a
+    function BCBTop!(ke, B, C, a, add=true)
+        Computes ke += B*C*B^T*a 
+		If add=false else ke is initially zeroed
     """
     m, n = size(B)
-    fill!(ke, 0.0)
+    if !add
+		fill!(ke, 0.0)
+	end
     for k=1:n
         for l=1:n
             for j=1:m
