@@ -1131,7 +1131,6 @@ function setsctr!(sctr, conn, nn, ndofpn)
     type scatter vector.  The element connectivity
     is given in conn, and the number of dof per
     node is given as ndofpn.
-
   """
   i = 1
   for n=conn[1:nn]
