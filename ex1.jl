@@ -1,6 +1,6 @@
 module FEA2D
 
-using FEM, LinearAlgebra 
+using FEM, LinearAlgebra, GenMesh 
 
 struct ProblemDefinition
 """
@@ -37,8 +37,8 @@ a downward point load on the lower right hand corner.
 
     name = "Cantilever_beam"
 
-    conn = FEM.Meshing.genconn2d([1,2,nnx+2,nnx+1], nelx, nely);
-    node = FEM.Meshing.nodearray2d([0 L L 0; 0 0 H H], nnx, nny);
+    conn = GenMesh.genconn2d([1,2,nnx+2,nnx+1], nelx, nely);
+    node = GenMesh.nodearray2d([0 L L 0; 0 0 H H], nnx, nny);
     
     ifix = [collect(1:2*nnx:2*nn); collect(2:2*nnx:2*nn)]
     iforce = [2*nnx]
@@ -117,8 +117,11 @@ function compute_operators(prob)
     Kdelay = FEM.DelayedAssmMat(prob.conn,2)
     ke = zeros(8,8)
     Ce = compute_matstiff(prob)
-    for e = 1:ne
-        ke = kmat_quad4(prob.node[:,prob.conn[:,e]], Ce, prob.thk)
+    e = 0
+    for econn in eachcol(prob.conn)
+        e += 1
+        coord = @view prob.node[:,econn]
+        ke = kmat_quad4(coord, Ce, prob.thk)
         FEM.add_kmat!(Kdelay, e, ke)
     end
 
@@ -136,9 +139,12 @@ function compute_stresses(prob, d)
     Ce = compute_matstiff(prob)
     sig = zeros(3,ne)
     sctr = zeros(Int64,nne*ldof)
-    for e = 1:ne
-        FEM.setsctr!(sctr, prob.conn[:,e], nne, ldof)
-        B, jac = bmat_quad4(prob.node[:,prob.conn[:,e]],[0. 0.])
+    e = 0
+    for econn in eachcol(prob.conn)
+        e += 1
+        coord = @view prob.node[:,econn]
+        FEM.setsctr!(sctr, econn, nne, ldof)
+        B, jac = bmat_quad4(coord,[0. 0.])
         epse = B*d[sctr]
         sig[:,e] = Ce*epse
     end
@@ -171,9 +177,7 @@ end
 
 end  # of FEA2D module
 ##########################################################################
-
 using .FEA2D
-
 
 prob = FEA2D.prob1();
 d, sig = FEA2D.solve(prob);
