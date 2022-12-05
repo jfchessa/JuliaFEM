@@ -1,6 +1,6 @@
 module FEA2D
 
-using FEM, LinearAlgebra, GenMesh 
+using FEM, LinearAlgebra, MeshGen 
 
 struct ProblemDefinition
 """
@@ -37,8 +37,8 @@ a downward point load on the lower right hand corner.
 
     name = "Cantilever_beam"
 
-    conn = GenMesh.genconn2d([1,2,nnx+2,nnx+1], nelx, nely);
-    node = GenMesh.nodearray2d([0 L L 0; 0 0 H H], nnx, nny);
+    conn = MeshGen.genconn2d([1,2,nnx+2,nnx+1], nelx, nely);
+    node = MeshGen.nodearray2d([0 L L 0; 0 0 H H], nnx, nny);
     
     ifix = [collect(1:2*nnx:2*nn); collect(2:2*nnx:2*nn)]
     iforce = [2*nnx]
