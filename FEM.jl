@@ -1156,6 +1156,25 @@ function setsctr!(sctr, conn, nn, ndofpn)
   ns = nn*ndofpn
 end
 
+function setsctr!(sctr, conn, nn, ldof, nldof, ndofpn)
+    """
+    function setsctr(sctr, conn, nn, ldof, nldof, ndofpn)
+
+        sets the array sctr to be a finite element
+        type scatter vector.  The element connectivity
+        is given in conn, and the number of dof per
+        node is given as ndofpn.
+    """
+    i = 1
+    for n = conn[1:nn]
+        Ii = ndofpn*(n-1)
+        for s = ldof[1:nldof] 
+            sctr[i] = Ii + s
+            i += 1
+        end
+    end
+	return i
+end
 function isojac!(jmat, dNdxi, coord, nn, sdim=3, edim=sdim)
   """
   function isojac(jmat, dNdxi, coord, nn, sdim=3, edim=sdim)
@@ -1480,25 +1499,6 @@ function setsctr!(sctr::Array{<:Integer,1}, dmap::AbstractDofMap,
 		end
 	end
 	return ii
-end
-function setsctr!(sctr, conn, nn, ldof, nldof, ndofpn)
-    """
-    function setsctr(sctr, conn, nn, ldof, nldof, ndofpn)
-
-        sets the array sctr to be a finite element
-        type scatter vector.  The element connectivity
-        is given in conn, and the number of dof per
-        node is given as ndofpn.
-    """
-    i = 1
-    for n = conn[1:nn]
-        Ii = ndofpn*(n-1)
-        for s = ldof[1:nldof] 
-            sctr[i] = Ii + s
-            i += 1
-        end
-    end
-	return i
 end
 # ------------- B O U N D A R Y   C O N D I T I O N   S T U F F --------------
 abstract type AbstractBC end
