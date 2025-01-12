@@ -21,7 +21,7 @@ export GAUSS1D_1PT, GAUSS1D_1WT, GAUSS1D_2PT, GAUSS1D_2WT, GAUSS1D_3PT, GAUSS1D_
        SIMPLEX3D_5PT , SIMPLEX3D_5WT
     
 export DelayedAssmMat, add_kmat!, assemble_mat
-export setsctr!, mat01_cmat
+export setsctr!
 export penaltybc!, fesolve!
 export BTCBop!
 
@@ -669,63 +669,6 @@ function BTCBop!(ke, B, m, n, C, a, add=true)
             end
         end
     end
-end
-
-function mat01_cmat(E, nu, form="3D")
-
-    if form == "AXIAL"
-
-        cmat =  ones(REALTYPE,1,1)*E
-
-    elseif form == "SHEAR"
-
-        cmat = ones(REALTYPE, 1, 1)*(0.5*E/(1+nu))
-
-    elseif form == "PSTRESS"
-        
-        c1 = REALTYPE(E/(1-nu^2))   
-        c2 = REALTYPE(nu*c1)
-        c3 = REALTYPE(0.5*(1-nu)*c1)
-        cmat = [c1 c2 0; c2 c1 0; 0 0 c3]
-        
-    elseif form == "PSTRAIN"
-        
-        c0 = REALTYPE(E/(1-2*nu)/(1+nu))
-        c1 = REALTYPE((1-nu)*c0)   
-        c2 = REALTYPE(nu*c0)   
-        c3 = REALTYPE(0.5*(1-2*nu)*c0)
-
-        cmat = [c1 c2 0; c2 c1 0; 0 0 c3]
-
-    elseif form == "AXISYM"
-        
-        c0 = REALTYPE(E/(1-2*nu)/(1+nu))
-        c1 = REALTYPE((1-nu)*c0)   
-        c2 = REALTYPE(nu*c0)   
-        c3 = REALTYPE(0.5*(1-2*nu)*c0)
-
-        cmat = [c1 c2 c2 0; 
-                c2 c1 c2 0; 
-                c2 c2 c1 0; 
-                 0  0  0 c3]
-
-    else
-
-        c0 = REALTYPE(E/(1-2*nu)/(1+nu))
-        c1 = REALTYPE((1-nu)*c0)   
-        c2 = REALTYPE(nu*c0)   
-        c3 = REALTYPE(0.5*(1-2*nu)*c0)
-
-        cmat = [c1 c2 c2  0  0  0; 
-                c2 c1 c2  0  0  0; 
-                c2 c2 c1  0  0  0; 
-                 0  0  0 c3  0  0;
-                 0  0  0  0 c3  0; 
-                 0  0  0  0  0 c3]
-
-    end
-
-    return cmat
 end
 
 function penaltybc!(K, f, ifix, ival, penal::Real=10.0e5)

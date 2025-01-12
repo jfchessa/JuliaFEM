@@ -2,7 +2,8 @@ __precompile__()
 
 module StructuralElements
 
-using FemBasics: REALTYPE, IDTYPE
+using FemBasics: REALTYPE, IDTYPE, BTCBop!,
+                 GAUSS2D_2PT, GAUSS2D_2WT
 
 using LinearAlgebra
 using StaticArrays
@@ -10,45 +11,90 @@ using StaticArrays
 export truss2d2_kmat!, truss2d2_bmat!, beam2d2_kmat!, beam2d2_bmat!
 export truss2d2_mmat!, truss3d2_mmat!
 export truss3d2_kmat!, truss3d2_bmat!, beam3d2_kmat!, beam3d2_bmat!
+export mat1_cmat
 
+# This is globally allocated space for doing local calculations
+# I know this is not a great idea, but does really speed things up
+# Use views to help address this memory in the functions.
 const global _ScRaTcH_REAL_ = zeros(REALTYPE,96,96)
-
-const global _GaUsS_2PT_ = sqrt(1/3)*ones(REALTYPE,2)
 
 ########################################################################
 # Stiffness and B matrices for several basic linear structural 
 # elements in 2d and 3d.
 ########################################################################
+function mat1_cmat(E, nu, form="3D")
+"""
+    function mat1_cmat(E, nu, form="3D")
 
-#----------------------------------------------------------------------
-# Basic Operations (most not exported)
-BTCBop!(ke, B, C, a, add=true) = (add ? ke .+= B'*C*B*a : ke .= B'*C*B*a)
-function BTCBop!(ke, B, m, n, C, a, add=true)
+    Returns the material stiffness matrix for a linear isotropic elastic
+    material (MAT1 in Nstran).
+
+    E = Young's modulus
+    nu = Poisson's ratio
+    form = Stress formulation the options are as below.
+        AXIAL - for axial stiffness
+        SHEAR - for shear stiffness
+        PSTRESS - Plane stress 
+        PSTRAIN - Plane strain 
+        AXISYM - Axisymmetric
+        3D (default) - Full three-dimensional case
 """
-function BTCBop!(ke, B, m, n, C, a, add=true)
-        Computes ke += B^T*C*B*a 
-    B is of dimensions m x n (ergo ke is n x n and C is m x m)
-	If add = false else ke is initially zeroed and 
-        ke = B^T*C*B*a 
-"""
-    if !add
-		fill!(ke, 0.0)
-	end
-    Ckla = 0.0
-    Blj = 0.0
-    for l=1:m
-        for k=1:m
-            Ckla = C[k,l]*a
-            for j=1:n
-                Blj = B[l,j]
-                for i=1:n
-                    ke[i,j] += B[k,i]*Ckla*Blj
-                end
-            end
-        end
+    if form == "AXIAL"
+
+        cmat =  ones(REALTYPE,1,1)*E
+
+    elseif form == "SHEAR"
+
+        cmat = ones(REALTYPE, 1, 1)*(0.5*E/(1+nu))
+
+    elseif form == "PSTRESS"
+        
+        c1 = REALTYPE(E/(1-nu^2))   
+        c2 = REALTYPE(nu*c1)
+        c3 = REALTYPE(0.5*(1-nu)*c1)
+        cmat = [c1 c2 0; c2 c1 0; 0 0 c3]
+        
+    elseif form == "PSTRAIN"
+        
+        c0 = REALTYPE(E/(1-2*nu)/(1+nu))
+        c1 = REALTYPE((1-nu)*c0)   
+        c2 = REALTYPE(nu*c0)   
+        c3 = REALTYPE(0.5*(1-2*nu)*c0)
+
+        cmat = [c1 c2 0; c2 c1 0; 0 0 c3]
+
+    elseif form == "AXISYM"
+        
+        c0 = REALTYPE(E/(1-2*nu)/(1+nu))
+        c1 = REALTYPE((1-nu)*c0)   
+        c2 = REALTYPE(nu*c0)   
+        c3 = REALTYPE(0.5*(1-2*nu)*c0)
+
+        cmat = [c1 c2 c2 0; 
+                c2 c1 c2 0; 
+                c2 c2 c1 0; 
+                 0  0  0 c3]
+
+    else
+
+        c0 = REALTYPE(E/(1-2*nu)/(1+nu))
+        c1 = REALTYPE((1-nu)*c0)   
+        c2 = REALTYPE(nu*c0)   
+        c3 = REALTYPE(0.5*(1-2*nu)*c0)
+
+        cmat = [c1 c2 c2  0  0  0; 
+                c2 c1 c2  0  0  0; 
+                c2 c2 c1  0  0  0; 
+                 0  0  0 c3  0  0;
+                 0  0  0  0 c3  0; 
+                 0  0  0  0  0 c3]
+
     end
+
+    return cmat
 end
 
+# Local use
 function release_dof!(ke, pp::Array{<:Int}, off::Int=0)
     """
         function release_dof!(ke, pp, off=0)
@@ -602,7 +648,8 @@ function beam3d2_bmat!(bb1, bb2, ba, bt, coord, v, xi, wa, wb)
 end   
 
 #----------------------------------------------------------------------
-# QUAD2D4 Element - Four node quadrilateral element in 2D
+# QUAD2D4 Element - Four node quadrilateral element in 2D.  Depending
+# on the C matrix passed, this can be plane stress or plane strain.
 function quad2d4_bmat!(B, coord, xi=nothing)
 
     jac = 0.0
@@ -654,34 +701,8 @@ function quad2d4_kmat!(ke, coord, cmat, qpts, qwts, thk::REALTYPE=1.0, add::Bool
 end
 
 function quad2d4_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false)
-    if !add
-        fill!(ke, REALTYPE(0))
-    end
-    B = @view _ScRaTcH_REAL_[1:3, 1:8]
-    q1 = sqrt(1/3)
-    q2 = q1
-    for q = 1:2
-        for r =1:2
-            jac = quad2d4_bmat!(B, coord, [q1;q2])
-            BTCBop!(ke, B, cmat, jac*qw*thk)
-            q1 = -q1
-        end
-        q2 = -q2
-    end
+    quad2d4_kmat!(ke, coord, cmat, GAUSS2D_2PT, GAUSS2D_2WT, thk, add)
 end
 
 end 
 # of the module definition
-#-----------------------------------------------------------------------
-#= using .StructuralElements: beam3d2_kmat!
-E=10e6;
-G = 3e6;
-A = 2;
-I1 = 4;
-I2 = 5;
-J = 3;
-coord = [0.0 5.0;0.0 0.0;0.0 0.0];
-v = [0.0, 1.0, 0.0];
-
-ke = zeros(Float64, 12, 12);
-beam3d2_kmat!(ke, coord, v, E, G, A, J, I1, I2) =#
