@@ -1,123 +1,170 @@
+__precompile__()
 
-# ------------------------  MESHING SUBMODULE ---------------------------
 module MeshGen
 
-export nodearray1d, nodearray2d, nodearray3d, genconn2d, genconn3d
-export QuadrilateralMesh, HexahedronMesh
-export get_nodes, get_connectivity, get_vertex_node, get_edge_connectivity,
-    get_face_connectivity, get_nodeids, get_edge_nodeids, get_face_nodeids
-export afine!
+using FemBasics: REALTYPE, IDTYPE
 
-REALTYPE = Float32
-IDTYPE = Int32
+"""
+linspace(a,b,n) returns a vector in the same manner as the
+Matlab linspace function.
+"""
+linspace(a,b,n) = collect(LinRange(a,b,n))
 
-#linspace(x1,x2,n) = LinRange(x1, x2, n)
-# function linspace(x1, x2, n)
-# 	return Array(range(x1, stop=x2, length=n))
-# end
-
-function shape_quad4!(N, xi)
-	"""
-	shape_quad4!(N, xi)
-	"""
-	s = xi[1]
-	t = xi[2]
-	N[1] = 0.25*(1-s)*(1-t)
-	N[2] = 0.25*(1+s)*(1-t)
-    N[3] = 0.25*(1+s)*(1+t)
-    N[4] = 0.25*(1-s)*(1+t)
-	return nl = 4
+"""
+Bias structrues are used to setup non uniform point spaceings
+"""
+abstract type AbstractBias end
+struct NullBias <: AbstractBias 
+end
+biaspts(xi, b::NullBias) = xi
+struct LinearBias  <: AbstractBias
+    s::REALTYPE
+end
+function biaspts(xi, b::LinearBias)
+    n = length(xi)
+    rv = b.s^(1/(n-2))
+    d = 1
+    for i in 2:n
+        xi[i] = xi[i-1]+d
+        d = d/rv
+    end
+    return xi/xi[n]
 end
 
-function shape_hexa8!(N, xi::AbstractArray{<:AbstractFloat,1}=zeros(3))
-	"""
-	shape_hexa8!(N, xi)
-	"""
-  n=length(xi)
-  I1=zeros(REALTYPE, n)
-  I2=zeros(REALTYPE, n)
-  for i=1:n
-  	I1[i] = 0.5 - 0.5*xi[i]
-  	I2[i] = 0.5 + 0.5*xi[i]
-  end
+struct PowerBias  <: AbstractBias
+    s::REALTYPE
+end
+function biaspts(xi, b::PowerBias)
+    return xi.^(b.s)
+end
+struct BellcurveBias  <: AbstractBias
+    s::REALTYPE
+end
+function biaspts(xi, b::BellcurveBias)
+    n = length(xi)
+    bc = 0.5*( tanh.(b.s*(xi.-0.5)) .+ 1 )
+    bc = bc .- bc[1]
+    return bc/bc[n]
+end
 
-  N[1] = I1[1]*I1[2]*I1[3]
-  N[2] = I2[1]*I1[2]*I1[3]
-  N[3] = I2[1]*I2[2]*I1[3]
-  N[4] = I1[1]*I2[2]*I1[3]
-  N[5] = I1[1]*I1[2]*I2[3]
-  N[6] = I2[1]*I1[2]*I2[3]
-  N[7] = I2[1]*I2[2]*I2[3]
-  N[8] = I1[1]*I2[2]*I2[3]
+function nodearray1d(p1, p2, n::Int, bias=NullBias())
+"""
+function nodearray1d(p1, p2, n::Int, bias=NullBias())
 
-  nl = 8
+    Returns a set of, n, nodes lying on the line from points p1 to p2.
+    The node spaceing can be biased with the parameter b1.
 
-end # shape_hexa8
-
-function nodearray1d(p1, p2, n)
-	N2 = LinRange(0, 1, Int(n))
-	N1 = 1 .- N2
+"""
+    N2 = biaspts(linspace(0, 1, n),bias)
+    N1 = 1 .- N2
 	s = length(p1)
 	x = zeros(s,Int(n))
 	for i = 1:s
 		x[i,:] = N1*p1[i] + N2*p2[i]
 	end
 	return x
-end # function
+end 
 
-function nodearray2d(corners, n1, n2=n1)
+function nodearray2d( corners, n1::Int, n2::Int, 
+            b1=NullBias(), b2=NullBias() )
+"""
+function nodearray2d(corners, n1, n2, b1, b2)
+
+    Returns a set of, n1 by n2, nodes lying on the quadrilateral
+    formed by the points given by corners. The node spaceing can be 
+    biased with the parameters b1 and b2.
+
+"""
 	# corners is the coordinates of the corners of the 2D patch
 	# in column format (i.e. each node is a column)
-	s = size(corners,1)
+	sd = size(corners,1)
     nn = Int(n1*n2)
-	x = zeros(s,nn)
-	xi = LinRange(-1, 1, Int(n1))
-	eta = LinRange(-1, 1, Int(n2))
+	x = zeros(sd,nn)
+	xi = biaspts(linspace(-1, 1, n1), b1)
+	eta = biaspts(linspace(-1, 1, n2), b2)
 
 	n=1
 	N = zeros(4)
 	for j=1:n2
 	  for i=1:n1
-	    pt = [xi[i], eta[j]]
-	    shape_quad4!(N, pt)
-	    x[1:s, n] = corners*N
+	    s = xi[i]; t = eta[j]
+	    N[1] = 0.25*(1-s)*(1-t)
+	    N[2] = 0.25*(1+s)*(1-t)
+        N[3] = 0.25*(1+s)*(1+t)
+        N[4] = 0.25*(1-s)*(1+t)
+	    x[1:sd, n] = corners*N
 	    n += 1
 	  end
 	end
 	return x
-end # function
+end 
 
+function nodearray3d(corners, n1::Int, n2::Int, n3::Int, 
+    b1=NullBias(), b2=NullBias(), b3=NullBias())
+"""
+function nodearray2d(corners, n1, n2, n3, b1, b2, b3)
 
-function nodearray3d(corners, nn1, nn2=n1, nn3=n2)
+    Returns a set of, n1xn2xn3, nodes lying on the hexahedron
+    formed by the points given by corners. The node spaceing can be 
+    biased with the parameters b1, b2 and b3.
+    
+"""
 	# corners is the coordinates of the corners of the 3D hexahedral region
 	# in column format (i.e. each node is a column)
-	s = size(corners,1)
-	n1 = Int(floor(nn1))
-	n2 = Int(floor(nn2))
-	n3 = Int(floor(nn3))
+	sd = size(corners,1)
   	nn = n1*n2*n3
-	x = zeros(s,nn)
+	x = zeros(sd,nn)
 
-	xi = LinRange(-1, 1, n1)
-	eta = LinRange(-1, 1, n2)
-	zeta = LinRange(-1, 1, n3)
+	xi = biaspts(linspace(-1, 1, n1), b1)
+	eta = biaspts(linspace(-1, 1, n2), b2)
+	zeta = biaspts(linspace(-1, 1, n3), b3)
 
 	n = 1
 	N = zeros(8)
 	for k=1:n3
-	  for j=1:n2
-	  	for i=1:n1
-	    	pt = [xi[i], eta[j], zeta[k]]
-	    	shape_hexa8!(N, pt)
-	    	x[1:s, n] = corners*N
-	    	n += 1
-		end
-	  end
+        I13 = 0.5 - 0.5*zeta[k]
+        I23 = 0.5 + 0.5*zeta[k]
+	    for j=1:n2
+            I12 = 0.5 - 0.5*eta[j]
+            I22 = 0.5 + 0.5*eta[j]
+	  	    for i=1:n1
+                I11 = 0.5 - 0.5*xi[i]
+                I21 = 0.5 + 0.5*xi[i]
+          
+                N[1] = I11*I12*I13
+                N[2] = I21*I12*I13
+                N[3] = I21*I22*I13
+                N[4] = I11*I22*I13
+                N[5] = I11*I12*I23
+                N[6] = I21*I12*I23
+                N[7] = I21*I22*I23
+                N[8] = I11*I22*I23
+          
+	    	    x[1:sd, n] = corners*N
+	    	    n += 1
+		    end
+	    end
 	end
 	return x
 end # function
 
 function genconn2d(node_pattern, num_u, num_v=num_u, inc_u=1, inc_v=2)
+"""
+function genconn2d(node_pattern, num_u, num_v=num_u, inc_u=1, inc_v=2)
+
+    Returns a connectivity matrix on a 2d grid.
+
+    node_pattern = the initial connectivity node_pattern
+    num_u = the number of elements in the u-direction
+    num_v = the number of elements in the v-direction
+    inc_u = the increment in the element connectivity when going from
+            one element to the next in the u-direction.  The default
+            is inc_u=1
+    inc_v = the increment of the element connectivity when going from
+            the last element in the previous v-row to the next v-row.
+            The default is inc_v = 2
+
+"""
 	ne = num_u*num_v
 	nnp = length(node_pattern)
 
@@ -137,6 +184,26 @@ end # genconn2d function
 
 function genconn3d(node_pattern, num_u, num_v=num_u, num_w=num_v,
 	     inc_u=1, inc_v=2, inc_w=num_u+3)
+"""
+function genconn3d(node_pattern, numu, numv, numw, incu, incv, incw)
+    
+    Returns a connectivity matrix on a (u, v, w) 3d grid.
+
+    node_pattern = the initial connectivity node_pattern
+    num_u = the number of elements in the u-direction
+    num_v = the number of elements in the v-direction
+    num_w = the number of elements in the w-direction
+    inc_u = the increment in the element connectivity when going from
+            one element to the next in the u-direction.  The default
+            is inc_u=1
+    inc_v = the increment of the element connectivity when going from
+            the last element in the previous v-row to the next v-row.
+            The default is inc_v = 2
+    inc_w = the increment of the element connectivity when going from
+            the last element in the previous w-level to the next w=level.
+            The default is inc_w = num_u+3
+
+"""
 	ne = num_u*num_v*num_w
 	nnp = length(node_pattern)
 
@@ -157,16 +224,27 @@ function genconn3d(node_pattern, num_u, num_v=num_u, num_w=num_v,
 	return element
 end # genconn3d function
 
+########################################################################
+#
+#  Some structures that hold some basic meshes
+#
 struct QuadrilateralMesh
     corners::Array{REALTYPE,2}
     ne::Array{Integer}
+    bias::Tuple{<:AbstractBias, <:AbstractBias}
 end
 
 QuadrilateralMesh(l1, l2, n1, n2) =
-	QuadrilateralMesh([0. l1 l1 0.;0. 0. l2 l2], [n1, n2])
+	QuadrilateralMesh([0. l1 l1 0.;0. 0. l2 l2], [n1, n2],
+                     (NullBias(),NullBias()))
+
+QuadrilateralMesh(l1, l2, n1, n2, b1, b2) =
+    QuadrilateralMesh([0. l1 l1 0.;0. 0. l2 l2], [n1, n2],
+        (b1, b2))
 
 function get_nodes(reg::QuadrilateralMesh)
-    node = nodearray2d(reg.corners, reg.ne[1]+1, reg.ne[2]+1)
+    return nodearray2d(reg.corners, reg.ne[1]+1, reg.ne[2]+1, reg.bias[1],
+             reg.bias[2])
 end
 
 function get_connectivity(reg::QuadrilateralMesh)
@@ -202,15 +280,18 @@ function get_edge_connectivity(reg::QuadrilateralMesh, eid)
 	end
 end
 
+#-----------------------------------------------------------------------
 struct HexahedronMesh
     corners::Array{REALTYPE,2}
     ne::Array{Integer}
+    bias::Tuple{<:AbstractBias, <:AbstractBias, <:AbstractBias}
 end
 
 HexahedronMesh(l1, l2, l3, n1, n2, n3) =
   HexahedronMesh([0. l1 l1 0. 0. l1 l1 0.;
                   0. 0. l2 l2 0. 0. l2 l2;
-				  0. 0. 0. 0. l3 l3 l3 l3],[n1, n2, n3])
+				  0. 0. 0. 0. l3 l3 l3 l3],[n1, n2, n3],
+                  (NullBias(), NullBias(), NullBias()))
 
 function get_nodes(reg::HexahedronMesh)
     return nodearray3d(reg.corners, reg.ne[1]+1, reg.ne[2]+1, reg.ne[3]+1)
@@ -385,5 +466,5 @@ function afine!(node, A, b)
 	end
 end
 
-end # of MeshGen module
-# ---------------------  END OF MESHING SUBMODULE -----------------------
+end 
+# --------------------- END OF MeshGen MODULE -------------------------#
