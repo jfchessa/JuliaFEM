@@ -704,5 +704,7 @@ function quad2d4_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false)
     quad2d4_kmat!(ke, coord, cmat, GAUSS2D_2PT, GAUSS2D_2WT, thk, add)
 end
 
+# ----------------------------------------------------------------------
 end 
-# of the module definition
+#                    end of the module definition
+# ----------------------------------------------------------------------
