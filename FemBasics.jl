@@ -2,7 +2,7 @@ __precompile__()
 
 module FemBasics
 
-export REALTYPE, IDTYPE
+export REALTYPE, IDTYPE    
 
 export shape_line2!, dshape_line2!, shape_line3!, dshape_line3!
 export shape_tria3!, dshape_tria3!, shape_tria6!, dshape_tria6!

@@ -3,7 +3,9 @@ __precompile__()
 module StructuralElements
 
 using FemBasics: REALTYPE, IDTYPE, BTCBop!,
-                 GAUSS2D_2PT, GAUSS2D_2WT
+                 SIMPLEX2D_1PT, SIMPLEX2D_1WT, SIMPLEX2D_3PT, SIMPLEX2D_3WT,
+                 GAUSS2D_2PT, GAUSS2D_2WT, GAUSS2D_3PT, GAUSS2D_3WT,
+                 dshape_tria6!, dshape_quad4!, dshape_quad8!
 
 using LinearAlgebra
 using StaticArrays
@@ -11,12 +13,16 @@ using StaticArrays
 export truss2d2_kmat!, truss2d2_bmat!, beam2d2_kmat!, beam2d2_bmat!
 export truss2d2_mmat!, truss3d2_mmat!
 export truss3d2_kmat!, truss3d2_bmat!, beam3d2_kmat!, beam3d2_bmat!
+export tria3_bmat!, tria3_kmat!, tria6_bmat!, tria6_kmat! 
+export quad4_bmat!, quad4_kmat!, quad8_bmat!, quad8_kmat!
 export mat1_cmat
 
 # This is globally allocated space for doing local calculations
 # I know this is not a great idea, but does really speed things up
 # Use views to help address this memory in the functions.
-const global _ScRaTcH_REAL_ = zeros(REALTYPE,96,96)
+const global _ScRaTcH_REAL_      = zeros(REALTYPE,96,96)
+const global _BMAT_SPACE_        = zeros(REALTYPE,12,96)
+const global _SHAPE_FUNCT_SPACE_ = zeros(REALTYPE,60,6)
 
 ########################################################################
 # Stiffness and B matrices for several basic linear structural 
@@ -118,6 +124,11 @@ function release_dof!(ke, pp::Array{<:Int}, off::Int=0)
     end
 end
 
+# *********************************************************************
+#
+#           T R U S S    A N D     B E A M     E L E M E N T S
+#
+# *********************************************************************
 #----------------------------------------------------------------------
 # TRUSS2D2 Element - two node truss element in 2D
 function truss2d2_kmat!(ke, coord, AE)
@@ -647,64 +658,379 @@ function beam3d2_bmat!(bb1, bb2, ba, bt, coord, v, xi, wa, wb)
 
 end   
 
+# *********************************************************************
+#
+#                      S H E L L     E L E M E N T S
+#
+# *********************************************************************
+
+# *********************************************************************
+#
+#            2 D     C O N T I N U U M    E L E M E N T S
+#
+# *********************************************************************
+
 #----------------------------------------------------------------------
-# QUAD2D4 Element - Four node quadrilateral element in 2D.  Depending
-# on the C matrix passed, this can be plane stress or plane strain.
-function quad2d4_bmat!(B, coord, xi=nothing)
-
-    jac = 0.0
-    dNdxi = @view B[1:2,1:4]
-    jmat = @view B[1:2,5:6]
-
-    if isnothing(xi)
-        r = 0.0; s = 0.0
-    else
-        r = xi[1]; s = xi[2]
+# Generic routines for 2D Continuum Elements
+function gradshape2d!(dN, coord, nn::Int)
+    j11 = coord[1,1]*dN[1,1]
+    j12 = coord[1,1]*dN[1,2]
+    j21 = coord[2,1]*dN[1,1]
+    j22 = coord[2,1]*dN[1,2]
+    for k in 2:nn
+        j11 += coord[1,k]*dN[k,1]
+        j12 += coord[1,k]*dN[k,2]
+        j21 += coord[2,k]*dN[k,1]
+        j22 += coord[2,k]*dN[k,2]
     end
-
-    dNdxi[1,1] = -0.25*(1-s)
-    dNdxi[1,2] =  0.25*(1-s)
-    dNdxi[1,3] =  0.25*(1+s)
-    dNdxi[1,4] = -0.25*(1+s)
-    dNdxi[2,1] = -0.25*(1-r)
-    dNdxi[2,2] = -0.25*(1+r)
-    dNdxi[2,3] =  0.25*(1+r)
-    dNdxi[2,4] =  0.25*(1-r)
-
-    jmat = coord*dNdxi'
-    jac = (jmat[1,1]*jmat[2,2]-jmat[1,2]*jmat[2,1])
+    jac = (j11*j22-j12*j21)
     invj = 1/jac
-    for I in 1:4
-        B[3,2*I]   = (jmat[2,2]*dNdxi[1,I] - jmat[1,2]*dNdxi[2,I])*invj
-        B[3,2*I-1] = (-jmat[2,1]*dNdxi[1,I] + jmat[1,1]*dNdxi[2,I])*invj
+    for i in 1:nn
+        dNi1 = dN[i,1]
+        dNi2 = dN[i,2] 
+        dN[i,1] = invj*(  dNi1*j22 - dNi2*j21 )
+        dN[i,2] = invj*( -dNi1*j12 + dNi2*j11 )
     end
-    for I in 1:4
-        B[1,2*I]   = 0.0
-        B[2,2*I-1] = 0.0
-        B[1,2*I-1] = B[3,2*I]
-        B[2,2*I] = B[3,2*I-1]
-    end
-
     return jac
-
 end
 
-function quad2d4_kmat!(ke, coord, cmat, qpts, qwts, thk::REALTYPE=1.0, add::Bool=false)
-    if !add
-        fill!(ke, REALTYPE(0))
+function fillB2D!(B, dNdx, nn::Int=size(dNdx,1)) 
+    for i in 1:nn
+        B[1,2*i-1] = dNdx[i,1]; B[1,2*i] = 0.0; 
+        B[2,2*i-1] = 0.0;       B[2,2*i] = dNdx[i,2]; 
+        B[3,2*i-1] = dNdx[i,2]; B[3,2*i] = dNdx[i,1]; 
     end
-    B = @view _ScRaTcH_REAL_[1:3, 1:8]
+end
+
+function gelem2dc_bmat!(B, coord, xi, dshapefunc, nn::Int=size(coord,2))
+    dN = @view _SHAPE_FUNCT_SPACE_[1:nn,1:2]  
+    dshapefunc(dN, xi)
+    jac = gradshape2d!(dN, coord, nn)
+    fillB2D!(B, dN, nn) 
+    return jac
+end
+
+function gelem2dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, bmatfunct, nn::Int=size(coord,2))
+    if !add
+        fill!(ke[2:nn,2:nn], REALTYPE(0))
+    end
+    B = @view _BMAT_SPACE_[1:3, 1:2*nn]
     for q = eachindex(qwts)
-        jac = quad2d4_bmat!(B, coord, qpts[:,q])
+        jac = bmatfunct(B, coord, qpts[q])
         BTCBop!(ke, B, cmat, jac*qwts[q]*thk)
     end
 end
 
-function quad2d4_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false)
-    quad2d4_kmat!(ke, coord, cmat, GAUSS2D_2PT, GAUSS2D_2WT, thk, add)
+#----------------------------------------------------------------------
+# TRIA3 Element 
+function gradshapeCST!(dN, coord)
+    x1 = coord[1,1]; x2 = coord[1,2]; x3 = coord[1,3];
+    y1 = coord[2,1]; y2 = coord[2,2]; y3 = coord[2,3];
+    jac = -((x2 - x3)*y1 - x1*(y2 - y3) + x3*y2 - x2*y3)
+    invj = 1/jac
+    dN[1,1] = (  y2 - y3 )*invj
+    dN[1,2] = ( -x2 + x3 )*invj
+    dN[2,1] = ( -y1 + y3 )*invj
+    dN[2,2] = (  x1 - x3 )*invj
+    dN[3,1] = (  y1 - y2 )*invj
+    dN[3,2] = ( -x1 + x2 )*invj
+    return jac
 end
 
-# ----------------------------------------------------------------------
+function tria3_bmat!(B, coord, xi=nothing) 
+    dN = @view _SHAPE_FUNCT_SPACE_[1:3,1:2]  
+    jac = gradshapeCST!(dN, coord)
+    fillB2D!(B, dN, 3) 
+    return jac
+end
+
+function tria3_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false) 
+    if !add
+        fill!(ke[1:6,1:6], REALTYPE(0))
+    end
+    B = @view _BMAT_SPACE_[1:3, 1:6]
+    jac = tria3_bmat!(B, coord)
+    BTCBop!(ke, B, cmat, 0.5*jac*thk)
+end
+
+#----------------------------------------------------------------------
+# TRIA6 Element
+tria6_bmat!(B, coord, xi) = gelem2dc_bmat!(B, coord, xi, dshape_tria6!, 6)
+
+tria6_kmat!(ke, coord, cmat, qpts, qwts, thk::REALTYPE=1.0, add::Bool=false) =
+    gelem2dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, tria6_bmat!, 6)
+
+tria6_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false) =
+    tria6_kmat!(ke, coord, cmat, SIMPLEX2D_3PT, SIMPLEX2D_3WT, thk, add)
+
+#----------------------------------------------------------------------
+# QUAD4 Element - Four node quadrilateral element in 2D.  Depending
+# on the C matrix passed, this can be plane stress or plane strain.
+quad4_bmat!(B, coord, xi) = gelem2dc_bmat!(B, coord, xi, dshape_quad4!, 4)
+
+quad4_kmat!(ke, coord, cmat, qpts, qwts, thk::REALTYPE=1.0, add::Bool=false) =
+    gelem2dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, quad4_bmat!, 4)
+
+quad4_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false) =
+    quad4_kmat!(ke, coord, cmat, GAUSS2D_2PT, GAUSS2D_2WT, thk, add)
+
+#----------------------------------------------------------------------
+# QUAD8 Element
+quad8_bmat!(B, coord, xi) = gelem2dc_bmat!(B, coord, xi, dshape_quad8!, 8)
+
+quad8_kmat!(ke, coord, cmat, qpts, qwts, thk::REALTYPE=1.0, add::Bool=false) =
+    gelem2dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, quad8_bmat!, 8)
+
+quad8_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false) =
+    quad8_kmat!(ke, coord, cmat, GAUSS2D_3PT, GAUSS2D_3WT, thk, add)
+
+# *********************************************************************
+#
+#            3 D     C O N T I N U U M    E L E M E N T S 
+#
+# *********************************************************************
+
+#----------------------------------------------------------------------
+# Generic routines for 3D Continuum Elements
+function gradshape3d!(dN, coord, nn::Int)
+    jmat = @view _ScRaTcH_REAL_[1:3,1:3]    # THIS IS NOT OPTIMIZED
+    jmat = coord*dN
+    jac = det(jmat)
+    dN .= dN/jmat
+    return jac
+end
+
+function fillB3D!(B, dNdx, nn::Int=size(dNdx,1)) 
+    for i in 1:nn
+        B[1,3*i-2] = dNdx[i,1]; B[1,3*i-1] = 0.0;       B[1,2*i] = 0.0;
+        B[2,3*i-2] = 0.0;       B[2,3*i-1] = dNdx[i,2]; B[2,2*i] = 0.0;
+        B[3,3*i-2] = 0.0;       B[3,3*i-1] = 0.0;       B[3,2*i] = dNdx[i,3];
+        B[4,3*i-2] = dNdx[i,2]; B[4,3*i-1] = dNdx[i,1]; B[3,2*i] = 0.0; 
+        B[5,3*i-2] = 0.0;       B[5,3*i-1] = dNdx[i,3]; B[5,2*i] = dNdx[i,2]; 
+        B[6,3*i-2] = dNdx[i,3]; B[6,3*i-1] = 0.0;       B[6,2*i] = dNdx[i,1]; 
+    end
+end
+
+function gelem3dc_bmat!(B, coord, xi, dshapefunc, nn::Int=size(coord,2))
+    dN = @view _SHAPE_FUNCT_SPACE_[1:nn,1:3]  
+    dshapefunc(dN, xi)
+    jac = gradshape3d!(dN, coord, nn)
+    fillB3D!(B, dN, nn) 
+    return jac
+end
+
+function gelem3dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, bmatfunct, nn::Int=size(coord,2))
+    if !add
+        fill!(ke[3:nn,3:nn], REALTYPE(0))
+    end
+    B = @view _BMAT_SPACE_[1:6, 1:3*nn]
+    for q = eachindex(qwts)
+        jac = bmatfunct(B, coord, qpts[q])
+        BTCBop!(ke, B, cmat, jac*qwts[q]*thk)
+    end
+end
+
+#----------------------------------------------------------------------
+# TETRA4 Element
+function gradshapeCSTet!(dN, coord)
+    x1 = coord[1,1]; x2 = coord[1,2]; x3 = coord[1,3];
+    y1 = coord[2,1]; y2 = coord[2,2]; y3 = coord[2,3];
+    z1 = coord[3,1]; z2 = coord[3,2]; z3 = coord[3,3];
+    jac = x3*y2*z1 - x4*y2*z1 - x2*y3*z1 + x4*y3*z1 + x2*y4*z1 - x3*y4*z1 - x3*y1*z2 + 
+        x4*y1*z2 + x1*y3*z2 - x4*y3*z2 - x1*y4*z2 + x3*y4*z2 + x2*y1*z3 - x4*y1*z3 - 
+        x1*y2*z3 + x4*y2*z3 + x1*y4*z3 - x2*y4*z3 - x2*y1*z4 + x3*y1*z4 + x1*y2*z4 - 
+        x3*y2*z4 - x1*y3*z4 + x2*y3*z4
+    dN[1, 1] = ( (y3 - y4)*z2 - y2*(z3 - z4) + y4*z3 - y3*z4 )*jac
+    dN[1, 2] = ( -(x3 - x4)*z2 + x2*(z3 - z4) - x4*z3 + x3*z4 )*jac
+    dN[1, 3] = ( (x3 - x4)*y2 - x2*(y3 - y4) + x4*y3 - x3*y4 )*jac
+    dN[2, 1] = ( -(y3 - y4)*z1 + y1*(z3 - z4) - y4*z3 + y3*z4 )*jac
+    dN[2, 2] = ( (x3 - x4)*z1 - x1*(z3 - z4) + x4*z3 - x3*z4 )*jac
+    dN[2, 3] = ( -(x3 - x4)*y1 + x1*(y3 - y4) - x4*y3 + x3*y4 )*jac
+    dN[3, 1] = ( (y2 - y4)*z1 - y1*(z2 - z4) + y4*z2 - y2*z4 )*jac
+    dN[3, 2] = ( -(x2 - x4)*z1 + x1*(z2 - z4) - x4*z2 + x2*z4 )*jac
+    dN[3, 3] = ( (x2 - x4)*y1 - x1*(y2 - y4) + x4*y2 - x2*y4 )*jac
+    dN[4, 1] = ( -(y2 - y3)*z1 + y1*(z2 - z3) - y3*z2 + y2*z3 )*jac
+    dN[4, 2] = ( (x2 - x3)*z1 - x1*(z2 - z3) + x3*z2 - x2*z3 )*jac
+    dN[4, 3] = ( -(x2 - x3)*y1 + x1*(y2 - y3) - x3*y2 + x2*y3 )*jac
+    return jac
+end
+
+function tetra4_bmat!(B, coord, xi=nothing) 
+    dN = @view _SHAPE_FUNCT_SPACE_[1:6,1:12]  
+    jac = gradshapeCSTet!(dN, coord)
+    fillB3D!(B, dN, 4) 
+    return jac
+end
+
+function tetra4_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false) 
+    if !add
+        fill!(ke[1:12,1:12], REALTYPE(0))
+    end
+    B = @view _BMAT_SPACE_[1:6, 1:12]
+    jac = tetra4_bmat!(B, coord)
+    BTCBop!(ke, B, cmat, 0.333333333333333*jac*thk)
+end
+
+#----------------------------------------------------------------------
+# TETRA10 Element
+tetra10_bmat!(B, coord, xi) = gelem3dc_bmat!(B, coord, xi, dshape_tetra10!, 10)
+
+tetra10_kmat!(ke, coord, cmat, qpts, qwts, thk::REALTYPE=1.0, add::Bool=false) =
+    gelem3dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, tetra10_bmat!, 10)
+
+tetra10_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false) =
+    tetra10_kmat!(ke, coord, cmat, SIMPLEX3D_3PT, SIMPLEX3D_3WT, thk, add)
+
+#----------------------------------------------------------------------
+# HEXA3D8 Element
+hexa8_bmat!(B, coord, xi) = gelem3dc_bmat!(B, coord, xi, dshape_hexa8!, 8)
+
+hexa8_kmat!(ke, coord, cmat, qpts, qwts, thk::REALTYPE=1.0, add::Bool=false) =
+    gelem3dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, hexa8_bmat!, 8)
+
+hexa8_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false) =
+    hexa8_kmat!(ke, coord, cmat, GAUSS3D_2PT, GAUSS3D_2WT, thk, add)
+
+#----------------------------------------------------------------------
+# HEXA20  Element
+hexa20_bmat!(B, coord, xi) = gelem3dc_bmat!(B, coord, xi, dshape_hexa8!, 20)
+
+hexa20_kmat!(ke, coord, cmat, qpts, qwts, thk::REALTYPE=1.0, add::Bool=false) =
+    gelem3dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, hexa20_bmat!, 20)
+
+hexa20_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false) =
+    hexa20_kmat!(ke, coord, cmat, GAUSS3D_3PT, GAUSS3D_3WT, thk, add)
+
+#----------------------------------------------------------------------
+# PENTA3D6  Element
+
+# ********************************************************************    
 end 
-#                    end of the module definition
-# ----------------------------------------------------------------------
+# ******************** of the module definition **********************
+using FemBasics: SIMPLEX2D_3PT, SIMPLEX2D_3WT
+
+using LinearAlgebra
+using .StructuralElements: mat1_cmat, gradshape2d!,
+                         tria3_kmat!, tria3_bmat!,
+                         tria6_kmat!, tria6_bmat!,
+                         quad4_kmat!, quad4_bmat!,
+                         quad8_kmat!, quad8_bmat!
+using .StructuralElements: gelem2dc_bmat!
+using FemBasics: dshape_quad8!
+
+E = 10e6;
+nu = .3;
+thk = 0.25;
+cmat = mat1_cmat(E, nu, "PSTRESS");
+
+print("***** Validating gradshape2d! ******\n")
+coord = [0.0 0.0; 2.0 0.2; 0.3 1.0]';
+dN = [-1.0 -1.0; 1.0 0.0; 0.0 1.0];
+gradshape2d!(dN, coord, 3);
+check =  [-0.412371134020619  -0.876288659793815;
+        0.515463917525773  -0.154639175257732;
+        -0.103092783505155   1.030927835051547];
+print(norm(dN-check),"\n")
+# -------------------
+
+coord = [0.0 0.0; 2.0 0.2; 2.1 1.5; -.1 1.2]';
+xi = [.1, .2];
+dN = [-0.200000000000000  -0.225000000000000;
+        0.200000000000000  -0.275000000000000;
+        0.300000000000000   0.275000000000000;
+        -0.300000000000000   0.225000000000000]
+check = [  -0.144845748683220  -0.357411587659895;
+        0.242663656884876  -0.440180586907449;
+                0.229495861550038   0.436418359668924;
+-0.327313769751693   0.361173814898420];
+gradshape2d!(dN, coord, 4);
+print(norm(dN-check),"\n")
+# -------------------
+
+print("***** Validating TRIA3 ******\n")
+coord = [0.0 0.0; 2.0 0.2; 0.3 1.0]';
+ke = zeros(6,6);
+be = zeros(3,6);
+jac = tria3_bmat!(be, coord);
+check = [
+    -0.412371134020619                   0   0.515463917525773                   0  -0.103092783505155                   0;
+                     0  -0.876288659793814                   0  -0.154639175257732                   0   1.030927835051547;
+    -0.876288659793814  -0.412371134020619  -0.154639175257732   0.515463917525773   1.030927835051547  -0.103092783505155];
+print("b-matrix: ", norm(be-check),"\n")
+print("b-matrix jac: ", norm(jac-1.94),"\n")
+
+tria3_kmat!(ke, coord, cmat, thk);
+check = [ 1.169352554661833   0.625920471281296  -0.440056077942676  -0.370312677013708  -0.729296476719157  -0.255607794267588;
+0.625920471281296   2.204882746119859  -0.301631358332389   0.162852611306220  -0.324289112948907  -2.367735357426079;
+-0.440056077942676  -0.301631358332389   0.730358558966806  -0.138070692194404  -0.290302481024131   0.439702050526793;
+-0.370312677013708   0.162852611306220  -0.138070692194404   0.311544125977116   0.508383369208111  -0.474396737283335;
+-0.729296476719157  -0.324289112948907  -0.290302481024131   0.508383369208111   1.019598957743288  -0.184094256259205;
+-0.255607794267588  -2.367735357426079   0.439702050526793  -0.474396737283335  -0.184094256259205   2.842132094709414]*1.0e6;
+print("k-matrix: ", norm(ke-check),"\n")
+
+
+print("***** Validating TRIA6 ******\n")
+coord = [0.0 0.0; 2.0 0.2; 0.3 1.0; 1.0 .99; 1.16 0.6; 0.16 0.5]';
+ke = zeros(12,12);
+be = zeros(3,12);
+xi = [0.2, 0.3];
+jac = tria6_bmat!(be, coord, xi);
+check = [5.59003376836725	0	-0.328557086793830	0	-1.44656384046728	0	7.75759788263210	0	-3.81491284110614	0	-7.75759788263211	0;
+    0	-9.60573149584740	0	0.360500136898786	0	2.28164643606826	0	-11.2895865656658	0	6.96358492288035	0	11.2895865656658;
+    -9.60573149584740	5.59003376836725	0.360500136898786	-0.328557086793830	2.28164643606826	-1.44656384046728	-11.2895865656658	7.75759788263210	6.96358492288035	-3.81491284110614	11.2895865656658	-7.75759788263211];
+print("b-matrix: ", norm(be-check),"\n")
+print("b-matrix jac: ", norm(jac-0.175312),"\n")
+tria6_kmat!(ke, coord, cmat, thk);
+check = [26438797.1163797	-13059177.0352671	-1209445.70638025	678137.070107810	6971368.42742972	-3187921.33900524	20764831.9194822	-9944261.40186488	-10699126.4901086	5196222.38936064	-42266425.2668029	20317000.3166688;
+    -13059177.0352671	28136193.5952293	655243.297214029	-1072270.37801509	-3165027.56611146	8004439.31496424	-9852686.31028980	20700683.0067869	5196222.38936064	-11592119.0667038	20225425.2250937	-44176926.4722615;
+    -1209445.70638025	655243.297214029	-1021744.85933055	-197754.721979690	-494489.149153390	-59725.5509901306	-1913412.73297178	-235833.855923902	2190833.23256366	620682.452624359	2448259.21527232	-782611.620944666;
+    678137.070107810	-1072270.37801509	-197754.721979690	-377545.825997416	-82619.3238839019	-244311.116076257	-327408.947499027	-1718295.20931302	712257.544199485	1590436.18116992	-782611.620944676	1821986.34823187;
+    6971368.42742972	-3165027.56611146	-494489.149153390	-82619.3238839019	3959104.55803637	-1270609.72163768	3793978.04224280	-2497213.25016168	-1807512.30235303	2241672.45704664	-12422449.5762025	4773797.40474808;
+    -3187921.33900524	8004439.31496424	-59725.5509901306	-244311.116076257	-1270609.72163768	8283055.10261802	-2497213.25016167	1599244.61168969	2150097.36547152	-804801.726262518	4865372.49632320	-16837626.1869332;
+    20764831.9194822	-9852686.31028980	-1913412.73297178	-327408.947499027	3793978.04224280	-2497213.25016167	14683576.9434962	-8560160.65787212	-5656008.65636566	5284096.17933545	-31672965.5158838	15953372.9864872;
+    -9944261.40186488	20700683.0067869	-235833.855923902	-1718295.20931302	-2497213.25016168	1599244.61168969	-8560160.65787212	11661129.6474657	5284096.17933544	-3417265.55508093	15953372.9864871	-28825496.5015484;
+    -10699126.4901086	5196222.38936064	2190833.23256366	712257.544199485	-1807512.30235303	2150097.36547152	-5656008.65636566	5284096.17933544	726307.072544202	-4129069.13109322	15245507.1437194	-9213604.34727386;
+    5196222.38936064	-11592119.0667038	620682.452624359	1590436.18116992	2241672.45704664	-804801.726262518	5284096.17933545	-3417265.55508094	-4129069.13109322	-1285145.80325978	-9213604.34727388	15508895.9701372;
+    -42266425.2668029	20225425.2250937	2448259.21527232	-782611.620944676	-12422449.5762025	4865372.49632320	-31672965.5158838	15953372.9864871	15245507.1437194	-9213604.34727387	68668073.9998974	-31047954.7396855;
+    20317000.3166688	-44176926.4722615	-782611.620944666	1821986.34823187	4773797.40474808	-16837626.1869332	15953372.9864872	-28825496.5015484	-9213604.34727386	15508895.9701372	-31047954.7396855	72509166.8423740];
+print("k-matrix: ", norm(ke-check),"\n")
+
+
+print("***** Validating QUAD4 ******\n")
+coord = [0.0 0.0; 2.0 0.2; 2.1 0.9; 0.3 1.0]';
+ke = zeros(8, 8);
+be = zeros(3,8);
+xi = [0.2, 0.3];
+jac = quad4_bmat!(be, coord, xi);
+check = [ -0.185970636215334	0	0.189233278955954	0	0.345840130505710	0	-0.349102773246329	0;
+    0	-0.446982055464927	0	-0.773246329526917	0	0.655791190864600	0	0.564437194127243;
+    -0.446982055464927	-0.185970636215334	-0.773246329526917	0.189233278955954	0.655791190864600	0.345840130505710	0.564437194127243	-0.349102773246329];
+print("b-matrix: ", norm(be-check),"\n")
+print("b-matrix jac: ", norm(jac-0.3831250),"\n")
+quad4_kmat!(ke, coord, cmat, thk);
+check = [887334.350859084	363118.475377253	-33683.3905733606	8370.51393463773	-430799.460927034	-401445.568546334	-422851.499358690	29956.5792344430;
+    363118.475377253	1684620.66398554	77051.8326159564	912521.595798976	-401445.568546334	-794731.054598878	-38724.7394468756	-1802411.20518564;
+    -33683.3905733606	77051.8326159564	1382143.24679572	-557185.616384314	-624158.222478334	-21824.6038762574	-724301.633744029	501958.387644615;
+    8370.51393463773	912521.595798976	-557185.616384314	2739467.67025696	46856.7148050613	-2194803.47389157	501958.387644615	-1457185.79216436;
+    -430799.460927034	-401445.568546334	-624158.222478334	46856.7148050613	1128183.46602009	342898.670319549	-73225.7826147193	11690.1834217234;
+    -401445.568546334	-794731.054598878	-21824.6038762574	-2194803.47389157	342898.670319549	2154089.98547300	80371.5021030421	835444.543017454;
+    -422851.499358690	-38724.7394468756	-724301.633744029	501958.387644615	-73225.7826147193	80371.5021030421	1220378.91571744	-543605.150300782;
+    29956.5792344430	-1802411.20518564	501958.387644615	-1457185.79216436	11690.1834217234	835444.543017454	-543605.150300782	2424152.45433255 ];
+print("k-matrix: ", norm(ke-check),"\n")
+
+print("***** Validating QUAD8 ******\n")
+#coord = [0.0 0.0; 2.0 0.2; 2.1 0.9; 0.3 1.0; 1.0 .1; 2.05 0.55; 1.2 1.0; 0.17 0.5 ]';
+coord = [0.0 0.0; 2.0 0.0; 2.0 2.0; 0.0 2.0; 1.0 0.0; 2.0 1.0; 1.0 2.0; 0.0 1.0 ]';
+ke = zeros(16, 16);
+be = zeros(3,16);
+#jac = quad8_bmat!(be, coord, xi);
+jac = gelem2dc_bmat!(be, coord, xi, dshape_quad8!, 8)
+check = [ 0.136181292323095	0	0.0219871518556113	0	0.251418301653295	0	0.0371087503650040	0	-0.163382788492290	0	0.480936357189538	0	-0.267669674763964	0	-0.496579390130289	0;
+    0	0.341929386852701	0	0.272181324105765	0	0.503638619122441	0	0.177046853614981	0	-1.07391655857248	0	-0.923907321733983	0	1.15853791771864	0	-0.455510221108063;
+    0.341929386852701	0.136181292323095	0.272181324105765	0.0219871518556113	0.503638619122441	0.251418301653295	0.177046853614981	0.0371087503650040	-1.07391655857248	-0.163382788492290	-0.923907321733983	0.480936357189538	1.15853791771864	-0.267669674763964	-0.455510221108063	-0.496579390130289];
+print("b-matrix: ", norm(be-check),"\n")
+print("b-matrix jac: ", norm(jac-1.6109408),"\n")
+
+dN = zeros(8,2)
+dshape_quad8!(dN, xi)
+#j = gradshape2d!(dN, coord, 8)
