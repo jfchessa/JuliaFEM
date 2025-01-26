@@ -707,14 +707,14 @@ function fesolve!(d, K::AbstractSparseArray, f, ifix, ival=nothing)
 	"""
 	fesolve(K, f, ifix, ival=zeros) for sparse arrays
 	"""
-	Kr = K[ifix,:]
+	Kr = K[ifix[:],:]
     if isnothing(ival)
         penaltybc!(K, f, ifix)
     else
 	    penaltybc!(K, f, ifix, ival)
     end
     d .= K \ f
-	f[ifix,:] = Kr*d
+	f[ifix[:],:] .= Kr*d
 end # of fesolve function
 
 end 
