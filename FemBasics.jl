@@ -9,7 +9,7 @@ export shape_tria3!, dshape_tria3!, shape_tria6!, dshape_tria6!
 export shape_quad4!, dshape_quad4!, shape_quad8!, dshape_quad8!
 export shape_tetra4!, dshape_tetra4!, shape_tetra10!, dshape_tetra10!
 export shape_hexa8!, dshape_hexa8!, shape_hexa20!, dshape_hexa20!
-export shape_penta6!, dshape_penta6! #shape_penta15!, dshape_penta15!
+export shape_penta6!, dshape_penta6!, shape_penta15!, dshape_penta15!
 
 export GAUSS1D_1PT, GAUSS1D_1WT, GAUSS1D_2PT, GAUSS1D_2WT, GAUSS1D_3PT, GAUSS1D_3WT, 
        GAUSS1D_4PT, GAUSS1D_4WT, GAUSS1D_5PT, GAUSS1D_5WT, GAUSS1D_6PT, GAUSS1D_6WT, 
@@ -94,6 +94,12 @@ end
 #  Constant strain triangle           !  \
 #                                     !    \
 #                                     1------2
+#
+#  Parent element node coordinates
+#   node 1  xi = 0.0  eta = 0.0
+#   node 2  xi = 1.0  eta = 0.0
+#   node 3  xi = 0.0  eta = 1.0
+#
 function shape_tria3!(N, xi)
 	"""
 	shape_tria3!(N, xi)
@@ -124,7 +130,15 @@ end
 #                                   6   5
 #                                   !    \
 #                                   1--4---2
-
+#
+#  Parent element node coordinates
+#   node 1  xi = 0.0  eta = 0.0
+#   node 2  xi = 1.0  eta = 0.0
+#   node 3  xi = 0.0  eta = 1.0
+#   node 4  xi = 0.5  eta = 0.0
+#   node 5  xi = 0.5  eta = 0.5
+#   node 6  xi = 0.0  eta = 0.5
+#
 function shape_tria6!(N, xi)
  	"""
  	shape_tria6!(N, xi)
@@ -159,6 +173,13 @@ end
 #  Four node quadrilateral element    !         !
 #                                     !         !
 #                                     1---------2
+#
+#  Parent element node coordinates
+#   node 1  xi = -1.0  eta = -1.0
+#   node 2  xi =  1.0  eta = -1.0
+#   node 3  xi =  1.0  eta =  1.0
+#   node 4  xi = -1.0  eta =  1.0
+#
 function shape_quad4!(N, xi)
 	"""
 	shape_quad4!(N, xi)
@@ -192,6 +213,16 @@ end
 #                                     8         6 
 #                                     !         !
 #                                     1----5----2
+#
+#  Parent element node coordinates
+#   node 1  xi = -1.0  eta = -1.0
+#   node 2  xi =  1.0  eta = -1.0
+#   node 3  xi =  1.0  eta =  1.0
+#   node 4  xi = -1.0  eta =  1.0
+#   node 5  xi =  0.0  eta = -1.0
+#   node 6  xi =  1.0  eta =  0.0
+#   node 7  xi =  0.0  eta =  1.0
+#   node 8  xi = -1.0  eta =  0.0
 #
 function shape_quad8!(N, xi)
 	"""
@@ -242,6 +273,11 @@ end
 #
 #  Four node tetrahedral element
 #
+#  Parent element node coordinates
+#   node 1  xi =  0.0  eta =  0.0  zeta =  0.0
+#   node 2  xi =  1.0  eta =  0.0  zeta =  0.0
+#   node 3  xi =  0.0  eta =  1.0  zeta =  0.0
+#   node 4  xi =  0.0  eta =  0.0  zeta =  1.0
 #
 function shape_tetra4!(N, xi)
 	"""
@@ -271,13 +307,26 @@ end
 #
 #  Ten node tetrahedral element
 #
-#      nodes 1 2 3 4 are on the vertecies in the r, s, and t direcections
+#      nodes 1 2 3 4 are on the vertecies in the xi, eta, and zeta direcections
 #      node 5 is between (1,2)
 #      node 6 is between (2,3)
 #      node 7 is between (3,1)
 #      node 8 is between (1,4)
 #      node 9 is between (2,4)
 #      node 10 is between (3,4)
+#
+#  Parent element node coordinates
+#   node  1  xi =  0.0  eta =  0.0  zeta =  0.0
+#   node  2  xi =  1.0  eta =  0.0  zeta =  0.0
+#   node  3  xi =  0.0  eta =  1.0  zeta =  0.0
+#   node  4  xi =  0.0  eta =  0.0  zeta =  1.0
+#   node  5  xi =  0.5  eta =  0.0  zeta =  0.0
+#   node  6  xi =  0.5  eta =  0.5  zeta =  0.0
+#   node  7  xi =  0.0  eta =  0.5  zeta =  0.0
+#   node  8  xi =  0.0  eta =  0.0  zeta =  0.5
+#   node  9  xi =  0.5  eta =  0.0  zeta =  0.5
+#   node 10  xi =  0.0  eta =  0.5  zeta =  0.5
+#
 function shape_tetra10!(N, xi)
 	"""
 	shape_tetra10!(N, xi)
@@ -355,6 +404,16 @@ end
 #
 # Eight node hexhedral element
 #
+#  Parent element node coordinates
+#   node  1  xi =  -1.0  eta =  -1.0  zeta =  -1.0
+#   node  2  xi =   1.0  eta =  -1.0  zeta =  -1.0
+#   node  3  xi =   1.0  eta =   1.0  zeta =  -1.0
+#   node  4  xi =  -1.0  eta =   1.0  zeta =  -1.0
+#   node  5  xi =  -1.0  eta =  -1.0  zeta =   1.0
+#   node  6  xi =   1.0  eta =  -1.0  zeta =   1.0
+#   node  7  xi =   1.0  eta =   1.0  zeta =   1.0
+#   node  8  xi =  -1.0  eta =   1.0  zeta =   1.0
+#
 function shape_hexa8!(N, xi)
 	"""
 	shape_hexa8!(N, xi)
@@ -426,6 +485,27 @@ end # shape_hexa8
 #   !         !   !         !   !         !
 #   1----9----2  17--------18   5---13----6
 #
+#  Parent element node coordinates
+#   node  1  xi =  -1.0  eta =  -1.0  zeta =  -1.0
+#   node  2  xi =   1.0  eta =  -1.0  zeta =  -1.0
+#   node  3  xi =   1.0  eta =   1.0  zeta =  -1.0
+#   node  4  xi =  -1.0  eta =   1.0  zeta =  -1.0
+#   node  5  xi =  -1.0  eta =  -1.0  zeta =   1.0
+#   node  6  xi =   1.0  eta =  -1.0  zeta =   1.0
+#   node  7  xi =   1.0  eta =   1.0  zeta =   1.0
+#   node  8  xi =  -1.0  eta =   1.0  zeta =   1.0
+#   node  9  xi =   0.0  eta =  -1.0  zeta =  -1.0
+#   node 10  xi =   1.0  eta =   0.0  zeta =  -1.0
+#   node 11  xi =   0.0  eta =   1.0  zeta =  -1.0
+#   node 12  xi =  -1.0  eta =   0.0  zeta =  -1.0
+#   node 13  xi =   0.0  eta =  -1.0  zeta =   1.0
+#   node 14  xi =   1.0  eta =   0.0  zeta =   1.0
+#   node 15  xi =   0.0  eta =   1.0  zeta =   1.0
+#   node 16  xi =  -1.0  eta =   0.0  zeta =   1.0
+#   node 17  xi =  -1.0  eta =  -1.0  zeta =   0.0
+#   node 18  xi =   1.0  eta =  -1.0  zeta =   0.0
+#   node 19  xi =   1.0  eta =   1.0  zeta =   0.0
+#   node 20  xi =  -1.0  eta =   1.0  zeta =   0.0
 #
 function shape_hexa20!(N, xi)
 	"""
@@ -530,7 +610,16 @@ end
 #
 # Six node pentahedral element
 #
-# Tensor product of a CST with a [-1,1] Legendra basis in the zeta direction
+# Tensor product of a CST with a [-1,1] Legendre basis in the zeta direction
+#
+#  Parent element node coordinates
+#   node 1  xi = 0.0  eta = 0.0  zeta = -1.0
+#   node 2  xi = 1.0  eta = 0.0  zeta = -1.0
+#   node 3  xi = 0.0  eta = 1.0  zeta = -1.0
+#   node 4  xi = 0.0  eta = 0.0  zeta =  1.0
+#   node 5  xi = 1.0  eta = 0.0  zeta =  1.0
+#   node 6  xi = 0.0  eta = 1.0  zeta =  1.0
+#
 function shape_penta6!(N, xi)
 	"""
 	shape_penta6!(N, xi)
@@ -576,6 +665,111 @@ function dshape_penta6!(dNxi, xi)
 	dNxi[6,3] = 0.5*s
 
 	nl = (6,3)
+end
+
+#
+# Fifteen node pentahedral element
+#
+# Tensor product of a CST with a [-1,1] Legendre basis in the zeta direction
+#
+#  Parent element node coordinates
+#   node  1  xi = 0.0  eta = 0.0  zeta = -1.0
+#   node  2  xi = 1.0  eta = 0.0  zeta = -1.0
+#   node  3  xi = 0.0  eta = 1.0  zeta = -1.0
+#   node  4  xi = 0.5  eta = 0.0  zeta = -1.0
+#   node  5  xi = 0.5  eta = 0.5  zeta = -1.0
+#   node  6  xi = 0.0  eta = 0.5  zeta = -1.0
+#   node  7  xi = 0.0  eta = 0.0  zeta =  1.0
+#   node  8  xi = 1.0  eta = 0.0  zeta =  1.0
+#   node  9  xi = 0.0  eta = 1.0  zeta =  1.0
+#   node 10  xi = 0.5  eta = 0.0  zeta =  1.0
+#   node 11  xi = 0.5  eta = 0.5  zeta =  1.0
+#   node 12  xi = 0.0  eta = 0.5  zeta =  1.0
+#   node 13  xi = 0.0  eta = 0.0  zeta =  0.0
+#   node 14  xi = 1.0  eta = 0.0  zeta =  0.0
+#   node 15  xi = 0.0  eta = 1.0  zeta =  0.0
+#
+
+function shape_penta15!(N, xi)
+	"""
+	shape_penta15!(N, xi)
+	"""
+	r = xi[1]; s = xi[2]; t = xi[3];
+    
+    N[ 1 ] =  (2*r^2 + 4*r*s + 2*s^2 - 3*r - 3*s + 1)*t*(0.5*t - 0.5)
+    N[ 2 ] =  (2*r - 1)*r*t*(0.5*t - 0.5)
+    N[ 3 ] =  (2*s - 1)*s*t*(0.5*t - 0.5)
+    N[ 4 ] =  -4*(r + s - 1)*r*t*(0.5*t - 0.5)
+    N[ 5 ] =  4*r*s*t*(0.5*t - 0.5)
+    N[ 6 ] =  -4*(r + s - 1)*s*t*(0.5*t - 0.5)
+    N[ 7 ] =  (2*r^2 + 4*r*s + 2*s^2 - 3*r - 3*s + 1)*t*(0.5*t + 0.5)
+    N[ 8 ] =  (2*r - 1)*r*t*(0.5*t + 0.5)
+    N[ 9 ] =  (2*s - 1)*s*t*(0.5*t + 0.5)
+    N[ 10 ] =  -4*(r + s - 1)*r*t*(0.5*t + 0.5)
+    N[ 11 ] =  4*r*s*t*(0.5*t + 0.5)
+    N[ 12 ] =  -4*(r + s - 1)*s*t*(0.5*t + 0.5)
+    N[ 13 ] =  (r + s - 1)*(t + 1)*(t - 1)
+    N[ 14 ] =  -r*(t + 1)*(t - 1)
+    N[ 15 ] =  -s*(t + 1)*(t - 1)
+
+	nl = 15
+end
+
+function dshape_penta15!(dN, xi)
+	"""
+	dshape_penta15!(dNxi, xi)
+	"""
+	r = xi[1]; s = xi[2]; t = xi[3];
+
+    dN[ 1 , 1 ] =  (4*r + 4*s - 3)*t*(0.5*t - 0.5)
+    dN[ 2 , 1 ] =  (2*r - 1)*t*(0.5*t - 0.5) + 2*r*t*(0.5*t - 0.5)
+    dN[ 3 , 1 ] =  0
+    dN[ 4 , 1 ] =  -4*(r + s - 1)*t*(0.5*t - 0.5) - 4*r*t*(0.5*t - 0.5)
+    dN[ 5 , 1 ] =  4*s*t*(0.5*t - 0.5)
+    dN[ 6 , 1 ] =  -4*s*t*(0.5*t - 0.5)
+    dN[ 7 , 1 ] =  (4*r + 4*s - 3)*t*(0.5*t + 0.5)
+    dN[ 8 , 1 ] =  (2*r - 1)*t*(0.5*t + 0.5) + 2*r*t*(0.5*t + 0.5)
+    dN[ 9 , 1 ] =  0
+    dN[ 10 , 1 ] =  -4*(r + s - 1)*t*(0.5*t + 0.5) - 4*r*t*(0.5*t + 0.5)
+    dN[ 11 , 1 ] =  4*s*t*(0.5*t + 0.5)
+    dN[ 12 , 1 ] =  -4*s*t*(0.5*t + 0.5)
+    dN[ 13 , 1 ] =  (t + 1)*(t - 1)
+    dN[ 14 , 1 ] =  -(t + 1)*(t - 1)
+    dN[ 15 , 1 ] =  0
+
+    dN[ 1 , 2 ] =  (4*r + 4*s - 3)*t*(0.5*t - 0.5)
+    dN[ 2 , 2 ] =  0
+    dN[ 3 , 2 ] =  (2*s - 1)*t*(0.5*t - 0.5) + 2*s*t*(0.5*t - 0.5)
+    dN[ 4 , 2 ] =  -4*r*t*(0.5*t - 0.5)
+    dN[ 5 , 2 ] =  4*r*t*(0.5*t - 0.5)
+    dN[ 6 , 2 ] =  -4*(r + s - 1)*t*(0.5*t - 0.5) - 4*s*t*(0.5*t - 0.5)
+    dN[ 7 , 2 ] =  (4*r + 4*s - 3)*t*(0.5*t + 0.5)
+    dN[ 8 , 2 ] =  0
+    dN[ 9 , 2 ] =  (2*s - 1)*t*(0.5*t + 0.5) + 2*s*t*(0.5*t + 0.5)
+    dN[ 10 , 2 ] =  -4*r*t*(0.5*t + 0.5)
+    dN[ 11 , 2 ] =  4*r*t*(0.5*t + 0.5)
+    dN[ 12 , 2 ] =  -4*(r + s - 1)*t*(0.5*t + 0.5) - 4*s*t*(0.5*t + 0.5)
+    dN[ 13 , 2 ] =  (t + 1)*(t - 1)
+    dN[ 14 , 2 ] =  0
+    dN[ 15 , 2 ] =  -(t + 1)*(t - 1)
+
+    dN[ 1 , 3 ] =  0.5*(2*r^2 + 4*r*s + 2*s^2 - 3*r - 3*s + 1)*t + (2*r^2 + 4*r*s + 2*s^2 - 3*r - 3*s + 1)*(0.5*t - 0.5)
+    dN[ 2 , 3 ] =  0.5*(2*r - 1)*r*t + (2*r - 1)*r*(0.5*t - 0.5)
+    dN[ 3 , 3 ] =  0.5*(2*s - 1)*s*t + (2*s - 1)*s*(0.5*t - 0.5)
+    dN[ 4 , 3 ] =  -2.0*(r + s - 1)*r*t - 4*(r + s - 1)*r*(0.5*t - 0.5)
+    dN[ 5 , 3 ] =  2.0*r*s*t + 4*r*s*(0.5*t - 0.5)
+    dN[ 6 , 3 ] =  -2.0*(r + s - 1)*s*t - 4*(r + s - 1)*s*(0.5*t - 0.5)
+    dN[ 7 , 3 ] =  0.5*(2*r^2 + 4*r*s + 2*s^2 - 3*r - 3*s + 1)*t + (2*r^2 + 4*r*s + 2*s^2 - 3*r - 3*s + 1)*(0.5*t + 0.5)
+    dN[ 8 , 3 ] =  0.5*(2*r - 1)*r*t + (2*r - 1)*r*(0.5*t + 0.5)
+    dN[ 9 , 3 ] =  0.5*(2*s - 1)*s*t + (2*s - 1)*s*(0.5*t + 0.5)
+    dN[ 10 , 3 ] =  -2.0*(r + s - 1)*r*t - 4*(r + s - 1)*r*(0.5*t + 0.5)
+    dN[ 11 , 3 ] =  2.0*r*s*t + 4*r*s*(0.5*t + 0.5)
+    dN[ 12 , 3 ] =  -2.0*(r + s - 1)*s*t - 4*(r + s - 1)*s*(0.5*t + 0.5)
+    dN[ 13 , 3 ] =  (r + s - 1)*(t + 1) + (r + s - 1)*(t - 1)
+    dN[ 14 , 3 ] =  -r*(t + 1) - r*(t - 1)
+    dN[ 15 , 3 ] =  -s*(t + 1) - s*(t - 1)
+
+	nl = (15,3)
 end
 
 #-----------------------------------------------------------------------------
@@ -695,6 +889,34 @@ function penaltybc!(K, f, ifix, penal::Real=10.0e5)
 	end
 end
 
+function enforcebc!(K, f, ifix, ival=nothing)
+	"""
+	function enforcebc!(K, f, ifix, ival=nothing)
+
+	Enforces an essential BC on a Kd=f system using an equation swap.  
+    This works for both trival and non-trivial essential BCs.
+	"""
+    m, n = size(K)
+    if !isnothing(ival) 
+        for (ii, I) in enumerate(ifix) 
+            f .-= K[:,I]*ival[ii]
+        end
+    end
+	for I in ifix
+		KII = K[I,I]
+		K[I,:] .= 0.0
+		K[:,I] .= 0.0
+        K[I,I] = KII
+	end
+    if isnothing(ival)
+        f[ifix] .= 0.0
+    else
+        for (ii, I) in enumerate(ifix) 
+            f[I] = K[I,I]*ival[ii]
+        end
+    end
+end
+
 function fesolve!(d, K::DelayedAssmMat, f, ifix, ival=nothing)
 	"""
 	fesolve(K, f, ifix, ival=zeros) 
@@ -703,15 +925,17 @@ function fesolve!(d, K::DelayedAssmMat, f, ifix, ival=nothing)
     return  fesolve!(d, Kmat, f, ifix, ival)
 end # of fesolve function
 
-function fesolve!(d, K::AbstractSparseArray, f, ifix, ival=nothing)
+function fesolve!(d, K::AbstractSparseArray, f, ifix, ival=nothing, ebcmethod=enforcebc!)
 	"""
-	fesolve(K, f, ifix, ival=zeros) for sparse arrays
+	fesolve(K, f, ifix, ival=zeros, ebcmethod=enforcebc!) for sparse arrays
 	"""
 	Kr = K[ifix[:],:]
     if isnothing(ival)
-        penaltybc!(K, f, ifix)
+        #penaltybc!(K, f, ifix)
+        ebcmethod(K, f, ifix)
     else
-	    penaltybc!(K, f, ifix, ival)
+	    #penaltybc!(K, f, ifix, ival)
+        ebcmethod(K, f, ifix, ival)
     end
     d .= K \ f
 	f[ifix[:],:] .= Kr*d

@@ -2,13 +2,18 @@ __precompile__()
 
 module MeshGen
 
+export linspace, NullBias, LinearBias, PowerBias, BellcurveBias
+export nodearray1d, nodearray2d, nodearray3d, genconn2d, genconn3d
+export QuadrilateralMesh, HexahedronMesh
+
 using FemBasics: REALTYPE, IDTYPE
 
 """
 linspace(a,b,n) returns a vector in the same manner as the
 Matlab linspace function.
 """
-linspace(a,b,n) = collect(LinRange(a,b,n))
+linspace(a,b,n) = collect(range(a,stop=b,length=n))
+#linspace(a,b,n) = collect(LinRange(a,b,n))
 
 """
 Bias structrues are used to setup non uniform point spaceings
