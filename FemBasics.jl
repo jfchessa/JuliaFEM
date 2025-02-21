@@ -10,6 +10,7 @@ export shape_quad4!, dshape_quad4!, shape_quad8!, dshape_quad8!
 export shape_tetra4!, dshape_tetra4!, shape_tetra10!, dshape_tetra10!
 export shape_hexa8!, dshape_hexa8!, shape_hexa20!, dshape_hexa20!
 export shape_penta6!, dshape_penta6!, shape_penta15!, dshape_penta15!
+export shape_pyramid5!, dshape_pyramid5!
 
 export GAUSS1D_1PT, GAUSS1D_1WT, GAUSS1D_2PT, GAUSS1D_2WT, GAUSS1D_3PT, GAUSS1D_3WT, 
        GAUSS1D_4PT, GAUSS1D_4WT, GAUSS1D_5PT, GAUSS1D_5WT, GAUSS1D_6PT, GAUSS1D_6WT, 
@@ -771,6 +772,59 @@ function dshape_penta15!(dN, xi)
 
 	nl = (15,3)
 end
+
+#------------------------------------------------------------------------------
+#
+# Five node pyramid element
+#
+#  Parent element node coordinates
+#   node  1  xi = -1.0  eta = -1.0  zeta = 0.0
+#   node  2  xi =  1.0  eta = -1.0  zeta = 0.0
+#   node  3  xi =  1.0  eta =  1.0  zeta = 0.0
+#   node  4  xi = -1.0  eta =  1.0  zeta = 0.0
+#   node  5  xi =  0.0  eta =  0.0  zeta = 1.0
+#
+
+function shape_pyramid5!(N, xi)
+	"""
+	shape_pyramid5!(N, xi)
+	"""
+	r = xi[1]; s = xi[2]; t = xi[3];
+    
+    N[ 1 ] = 0.25*( r*s - r - s - t + 1 )
+    N[ 2 ] = 0.25*( -r*s + r - s - t + 1 )
+    N[ 3 ] = 0.25*( r*s + r + s - t + 1 )
+    N[ 4 ] = 0.25*( -r*s - r + s - t + 1 )
+    N[ 5 ] = t
+
+	nl = 5
+end
+
+function dshape_pyramid5!(dN, xi)
+	"""
+	dshape_pyramid5!(dNxi, xi)
+	"""
+	r = xi[1]; s = xi[2]; t = xi[3];
+
+    dN[ 1 , 1 ] = 0.25*( s - 1 )
+    dN[ 1 , 2 ] = 0.25*( r - 1 )
+    dN[ 1 , 3 ] = 0.25*( -1 )
+    dN[ 2 , 1 ] = 0.25*( -s + 1 )
+    dN[ 2 , 2 ] = 0.25*( -r - 1 )
+    dN[ 2 , 3 ] = 0.25*( -1 )
+    dN[ 3 , 1 ] = 0.25*( s + 1 )
+    dN[ 3 , 2 ] = 0.25*( r + 1 )
+    dN[ 3 , 3 ] = 0.25*( -1 )
+    dN[ 4 , 1 ] = 0.25*( -s - 1 )
+    dN[ 4 , 2 ] = 0.25*( -r + 1 )
+    dN[ 4 , 3 ] = 0.25*( -1 )
+    dN[ 5 , 1 ] = 0.0
+    dN[ 5 , 2 ] = 0.0
+    dN[ 5 , 3 ] = 1.0
+
+	nl = (5,3)
+end
+
 
 #-----------------------------------------------------------------------------
 struct DelayedAssmMat
