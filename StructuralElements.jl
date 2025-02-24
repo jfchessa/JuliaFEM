@@ -8,7 +8,8 @@ using FemBasics: BTCBop!, IDTYPE, REALTYPE,
     SIMPLEX2D_1PT, SIMPLEX2D_1WT, SIMPLEX2D_3PT, SIMPLEX2D_3WT,
     SIMPLEX3D_4PT, SIMPLEX3D_4WT, SIMPLEX3D_5PT, SIMPLEX3D_5WT, 
     dshape_tria3!, dshape_tria6!, dshape_quad4!, dshape_quad8!,
-    dshape_tetra4!, dshape_tetra10!, dshape_hexa8!, dshape_hexa20!
+    dshape_tetra4!, dshape_tetra10!, dshape_hexa8!, dshape_hexa20!,
+    gradshape2d!, gradshapetria3!, gradshape3d!, gradshapetetra4!
 
 using LinearAlgebra
 using StaticArrays
@@ -675,29 +676,6 @@ end
 #
 # *********************************************************************
 
-#----------------------------------------------------------------------
-# Generic routines for 2D Continuum Elements
-function gradshape2d!(dN, coord, nn::Int)
-    j11 = coord[1,1]*dN[1,1]
-    j12 = coord[1,1]*dN[1,2]
-    j21 = coord[2,1]*dN[1,1]
-    j22 = coord[2,1]*dN[1,2]
-    for k in 2:nn
-        j11 += coord[1,k]*dN[k,1]
-        j12 += coord[1,k]*dN[k,2]
-        j21 += coord[2,k]*dN[k,1]
-        j22 += coord[2,k]*dN[k,2]
-    end
-    jac = (j11*j22-j12*j21)
-    invj = 1/jac
-    for i in 1:nn
-        dNi1 = dN[i,1]
-        dNi2 = dN[i,2] 
-        dN[i,1] = invj*(  dNi1*j22 - dNi2*j21 )
-        dN[i,2] = invj*( -dNi1*j12 + dNi2*j11 )
-    end
-    return jac
-end
 
 function fillB2D!(B, dNdx, nn::Int=size(dNdx,1)) 
     for i in 1:nn
@@ -726,25 +704,10 @@ function gelem2dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, bmatfunct, nn::In
     end
 end
 
-#----------------------------------------------------------------------
-# TRIA3 Element 
-function gradshapeCST!(dN, coord)
-    x1 = coord[1,1]; x2 = coord[1,2]; x3 = coord[1,3];
-    y1 = coord[2,1]; y2 = coord[2,2]; y3 = coord[2,3];
-    jac = -((x2 - x3)*y1 - x1*(y2 - y3) + x3*y2 - x2*y3)
-    invj = 1/jac
-    dN[1,1] = (  y2 - y3 )*invj
-    dN[1,2] = ( -x2 + x3 )*invj
-    dN[2,1] = ( -y1 + y3 )*invj
-    dN[2,2] = (  x1 - x3 )*invj
-    dN[3,1] = (  y1 - y2 )*invj
-    dN[3,2] = ( -x1 + x2 )*invj
-    return jac
-end
 
 function tria3_bmat!(B, coord, xi=nothing) 
     dN = @view _SHAPE_FUNCT_SPACE_[1:3,1:2]  
-    jac = gradshapeCST!(dN, coord)
+    jac = gradshapetria3!(dN, coord)
     fillB2D!(B, dN, 3) 
     return jac
 end
@@ -797,13 +760,6 @@ quad8_kmat!(ke, coord, cmat, thk::REALTYPE=1.0, add::Bool=false) =
 
 #----------------------------------------------------------------------
 # Generic routines for 3D Continuum Elements
-function gradshape3d!(dN, coord)
-    jmat = @view _ScRaTcH_REAL_[1:3,1:3]    # THIS IS NOT OPTIMIZED
-    jmat = coord*dN                         # BUT NOT SURE WHAT TO DO
-    dN .= dN/jmat
-    return det(jmat)
-end
-
 function fillB3D!(B, dNdx, nn::Int=size(dNdx,1)) 
     for i in 1:nn
         B[1,3*i-2] = dNdx[i,1]; B[1,3*i-1] = 0.0;       B[1,3*i] = 0.0;
@@ -835,34 +791,9 @@ function gelem3dc_kmat!(ke, coord, cmat, qpts, qwts, thk, add, bmatfunct, nn::In
 end
 
 #----------------------------------------------------------------------
-# TETRA4 Element
-function gradshapeCSTet!(dN, coord)
-    x1 = coord[1,1]; x2 = coord[1,2]; x3 = coord[1,3]; x4 = coord[1,4];
-    y1 = coord[2,1]; y2 = coord[2,2]; y3 = coord[2,3]; y4 = coord[2,4];
-    z1 = coord[3,1]; z2 = coord[3,2]; z3 = coord[3,3]; z4 = coord[3,4];
-    jac = x3*y2*z1 - x4*y2*z1 - x2*y3*z1 + x4*y3*z1 + x2*y4*z1 - x3*y4*z1 - x3*y1*z2 + 
-        x4*y1*z2 + x1*y3*z2 - x4*y3*z2 - x1*y4*z2 + x3*y4*z2 + x2*y1*z3 - x4*y1*z3 - 
-        x1*y2*z3 + x4*y2*z3 + x1*y4*z3 - x2*y4*z3 - x2*y1*z4 + x3*y1*z4 + x1*y2*z4 - 
-        x3*y2*z4 - x1*y3*z4 + x2*y3*z4
-    invj = 1/jac
-    dN[1, 1] = ( (y3 - y4)*z2 - y2*(z3 - z4) + y4*z3 - y3*z4 )*invj
-    dN[1, 2] = ( -(x3 - x4)*z2 + x2*(z3 - z4) - x4*z3 + x3*z4 )*invj
-    dN[1, 3] = ( (x3 - x4)*y2 - x2*(y3 - y4) + x4*y3 - x3*y4 )*invj
-    dN[2, 1] = ( -(y3 - y4)*z1 + y1*(z3 - z4) - y4*z3 + y3*z4 )*invj
-    dN[2, 2] = ( (x3 - x4)*z1 - x1*(z3 - z4) + x4*z3 - x3*z4 )*invj
-    dN[2, 3] = ( -(x3 - x4)*y1 + x1*(y3 - y4) - x4*y3 + x3*y4 )*invj
-    dN[3, 1] = ( (y2 - y4)*z1 - y1*(z2 - z4) + y4*z2 - y2*z4 )*invj
-    dN[3, 2] = ( -(x2 - x4)*z1 + x1*(z2 - z4) - x4*z2 + x2*z4 )*invj
-    dN[3, 3] = ( (x2 - x4)*y1 - x1*(y2 - y4) + x4*y2 - x2*y4 )*invj
-    dN[4, 1] = ( -(y2 - y3)*z1 + y1*(z2 - z3) - y3*z2 + y2*z3 )*invj
-    dN[4, 2] = ( (x2 - x3)*z1 - x1*(z2 - z3) + x3*z2 - x2*z3 )*invj
-    dN[4, 3] = ( -(x2 - x3)*y1 + x1*(y2 - y3) - x3*y2 + x2*y3 )*invj
-    return jac
-end
-
 function tetra4_bmat!(B, coord, xi=nothing) 
     dN = @view _SHAPE_FUNCT_SPACE_[1:4,1:3]  
-    jac = gradshapeCSTet!(dN, coord)
+    jac = gradshapetetra4!(dN, coord)
     fillB3D!(B, dN, 4) 
     return jac
 end

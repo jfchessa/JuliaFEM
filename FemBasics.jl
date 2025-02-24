@@ -21,6 +21,7 @@ export GAUSS1D_1PT, GAUSS1D_1WT, GAUSS1D_2PT, GAUSS1D_2WT, GAUSS1D_3PT, GAUSS1D_
        SIMPLEX2D_7PT, SIMPLEX2D_7WT, SIMPLEX3D_1PT , SIMPLEX3D_1WT, SIMPLEX3D_4PT , SIMPLEX3D_4WT, 
        SIMPLEX3D_5PT , SIMPLEX3D_5WT
     
+export gradshape2d!, gradshapeTria3!, gradshape3d!, gradshapeTetra4!
 export DelayedAssmMat, add_kmat!, assemble_mat
 export setsctr!
 export penaltybc!, fesolve!
@@ -825,6 +826,179 @@ function dshape_pyramid5!(dN, xi)
 	nl = (5,3)
 end
 
+#-----------------------------------------------------------------------------
+# Isoparametric gradient functions
+function gradshape1d!(dN, coord, nn::Int=size(coord)[2])
+    """
+    gradshape1d!(dN, coord, nn::Int=size(coord)[2])
+    
+     Computes the gradient of a 1D isoparametric element and returns the 
+     determinant of the element Jacobian matrix
+
+     dN - on input holds the gradient of the element shape function with
+          resepect to the parent coordianate system, and on return holds
+          the values of the gradient of the shape function with resepct 
+          to the spacial coordinates
+     coord - a matrix of the element nodeal coordinates. The nodal coordinates
+            are stored in the columns of coord.
+     nn::Int - the number of nodes in the element (default is the number of 
+              columns in coord)
+    """
+    jac = 0.0
+    for i in 1:n
+        jac += coord[i]*dN[i]
+    end
+    invj = 1/jac
+    dN .= dN*invj
+    return jac
+end
+
+function gradshapeline2!(dN, coord)
+    """
+    gradshapeline2!(dN, coord)
+
+    Computes the gradient of a Line2 element and returns the 
+    determinant of the element Jacobian matrix (1/2 the length of the elemnt).  
+    This is a bit faster than using gradshap1d! (probably not though).
+
+    dN - On return holds the values of the gradient of the shape function with 
+         resepct to the spacial coordinates (no need to input dNdxi)
+    coord - a matrix of the element nodeal coordinates. The nodal coordinates
+           are stored in the columns of coord.
+    """
+    jac = 0.5*abs(coord[2]-coord[1])
+    dN .= dN*(1/jac)
+    return jac
+end
+
+function gradshape2d!(dN, coord, nn::Int=size(coord)[2])
+    """
+     gradshape2d!(dN, coord, nn::Int)
+
+     Computes the gradient of a 2D isoparametric element and returns the 
+     determinant of the element Jacobian matrix
+
+     dN - on input holds the gradient of the element shape function with
+          resepect to the parent coordianate system, and on return holds
+          the values of the gradient of the shape function with resepct 
+          to the spacial coordinates
+     coord - a matrix of the element nodeal coordinates. The nodal coordinates
+            are stored in the columns of coord.
+     nn::Int - the number of nodes in the element (default is the number of 
+              columns in coord)
+
+    """
+    j11 = coord[1,1]*dN[1,1]
+    j12 = coord[1,1]*dN[1,2]
+    j21 = coord[2,1]*dN[1,1]
+    j22 = coord[2,1]*dN[1,2]
+    for k in 2:nn
+        j11 += coord[1,k]*dN[k,1]
+        j12 += coord[1,k]*dN[k,2]
+        j21 += coord[2,k]*dN[k,1]
+        j22 += coord[2,k]*dN[k,2]
+    end
+    jac = (j11*j22-j12*j21)
+    invj = 1/jac
+    for i in 1:nn
+        dNi1 = dN[i,1]
+        dNi2 = dN[i,2] 
+        dN[i,1] = invj*(  dNi1*j22 - dNi2*j21 )
+        dN[i,2] = invj*( -dNi1*j12 + dNi2*j11 )
+    end
+    return jac
+end
+
+function gradshapetria3!(dN, coord)
+    """
+     gradshapetria3!(dN, coord)
+
+     Computes the gradient of a Tria3 element and returns the 
+     determinant of the element Jacobian matrix.  This is a bit faster
+     than using gradshap2d!.
+
+     dN - On return holds the values of the gradient of the shape function with 
+          resepct to the spacial coordinates (no need to input dNdxi)
+     coord - a matrix of the element nodeal coordinates. The nodal coordinates
+            are stored in the columns of coord.
+
+    """
+    x1 = coord[1,1]; x2 = coord[1,2]; x3 = coord[1,3];
+    y1 = coord[2,1]; y2 = coord[2,2]; y3 = coord[2,3];
+    jac = -((x2 - x3)*y1 - x1*(y2 - y3) + x3*y2 - x2*y3)
+    invj = 1/jac
+    dN[1,1] = (  y2 - y3 )*invj
+    dN[1,2] = ( -x2 + x3 )*invj
+    dN[2,1] = ( -y1 + y3 )*invj
+    dN[2,2] = (  x1 - x3 )*invj
+    dN[3,1] = (  y1 - y2 )*invj
+    dN[3,2] = ( -x1 + x2 )*invj
+    return jac
+end
+
+# This is globally allocated space for doing local calculations
+# I know this is not a great idea, but does really speed things up
+# Use views to help address this memory in the functions. 
+const global _ScRaTcH_REAL_FEMBASICS_  = zeros(REALTYPE,3,3)
+function gradshape3d!(dN, coord, nn=size(coord)[2])
+    """
+     gradshape3d!(dN, coord, nn::Int)
+
+     Computes the gradient of a 3D isoparametric element and returns the 
+     determinant of the element Jacobian matrix
+
+     dN - on input holds the gradient of the element shape function with
+          resepect to the parent coordianate system, and on return holds
+          the values of the gradient of the shape function with resepct 
+          to the spacial coordinates
+     coord - a matrix of the element nodeal coordinates. The nodal coordinates
+            are stored in the columns of coord.
+     nn::Int - the number of nodes in the element (default is the number of 
+              columns in coord, but not really used.)
+
+    """
+    jmat = @view _ScRaTcH_REAL_FEMBASICS_[1:3,1:3]    # THIS IS NOT OPTIMIZED
+    jmat = coord*dN                                   # BUT NOT SURE WHAT TO DO
+    dN .= dN/jmat
+    return det(jmat)
+end
+
+function gradshapetetra4!(dN, coord)
+    """
+     gradshapetetra4!(dN, coord)
+
+     Computes the gradient of a Tettra4 element and returns the 
+     determinant of the element Jacobian matrix.  This is a bit faster
+     than using gradshap3d!.
+
+     dN - On return holds the values of the gradient of the shape function with 
+          resepct to the spacial coordinates (no need to input dNdxi)
+     coord - a matrix of the element nodeal coordinates. The nodal coordinates
+            are stored in the columns of coord.
+
+    """
+    x1 = coord[1,1]; x2 = coord[1,2]; x3 = coord[1,3]; x4 = coord[1,4];
+    y1 = coord[2,1]; y2 = coord[2,2]; y3 = coord[2,3]; y4 = coord[2,4];
+    z1 = coord[3,1]; z2 = coord[3,2]; z3 = coord[3,3]; z4 = coord[3,4];
+    jac = x3*y2*z1 - x4*y2*z1 - x2*y3*z1 + x4*y3*z1 + x2*y4*z1 - x3*y4*z1 - x3*y1*z2 + 
+        x4*y1*z2 + x1*y3*z2 - x4*y3*z2 - x1*y4*z2 + x3*y4*z2 + x2*y1*z3 - x4*y1*z3 - 
+        x1*y2*z3 + x4*y2*z3 + x1*y4*z3 - x2*y4*z3 - x2*y1*z4 + x3*y1*z4 + x1*y2*z4 - 
+        x3*y2*z4 - x1*y3*z4 + x2*y3*z4
+    invj = 1/jac
+    dN[1, 1] = ( (y3 - y4)*z2 - y2*(z3 - z4) + y4*z3 - y3*z4 )*invj
+    dN[1, 2] = ( -(x3 - x4)*z2 + x2*(z3 - z4) - x4*z3 + x3*z4 )*invj
+    dN[1, 3] = ( (x3 - x4)*y2 - x2*(y3 - y4) + x4*y3 - x3*y4 )*invj
+    dN[2, 1] = ( -(y3 - y4)*z1 + y1*(z3 - z4) - y4*z3 + y3*z4 )*invj
+    dN[2, 2] = ( (x3 - x4)*z1 - x1*(z3 - z4) + x4*z3 - x3*z4 )*invj
+    dN[2, 3] = ( -(x3 - x4)*y1 + x1*(y3 - y4) - x4*y3 + x3*y4 )*invj
+    dN[3, 1] = ( (y2 - y4)*z1 - y1*(z2 - z4) + y4*z2 - y2*z4 )*invj
+    dN[3, 2] = ( -(x2 - x4)*z1 + x1*(z2 - z4) - x4*z2 + x2*z4 )*invj
+    dN[3, 3] = ( (x2 - x4)*y1 - x1*(y2 - y4) + x4*y2 - x2*y4 )*invj
+    dN[4, 1] = ( -(y2 - y3)*z1 + y1*(z2 - z3) - y3*z2 + y2*z3 )*invj
+    dN[4, 2] = ( (x2 - x3)*z1 - x1*(z2 - z3) + x3*z2 - x2*z3 )*invj
+    dN[4, 3] = ( -(x2 - x3)*y1 + x1*(y2 - y3) - x3*y2 + x2*y3 )*invj
+    return jac
+end
 
 #-----------------------------------------------------------------------------
 struct DelayedAssmMat
