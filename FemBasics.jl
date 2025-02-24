@@ -21,7 +21,7 @@ export GAUSS1D_1PT, GAUSS1D_1WT, GAUSS1D_2PT, GAUSS1D_2WT, GAUSS1D_3PT, GAUSS1D_
        SIMPLEX2D_7PT, SIMPLEX2D_7WT, SIMPLEX3D_1PT , SIMPLEX3D_1WT, SIMPLEX3D_4PT , SIMPLEX3D_4WT, 
        SIMPLEX3D_5PT , SIMPLEX3D_5WT
     
-export gradshape2d!, gradshapeTria3!, gradshape3d!, gradshapeTetra4!
+export gradshape1d!, gradshapeline2!, gradshape2d!, gradshapetria3!, gradshape3d!, gradshapetetra4!
 export DelayedAssmMat, add_kmat!, assemble_mat
 export setsctr!
 export penaltybc!, fesolve!
